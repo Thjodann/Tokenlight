@@ -73,7 +73,7 @@ export function normalizeCodex(limits, usage, month) {
   const buckets = usage?.dailyUsageBuckets;
   if (Array.isArray(buckets) && buckets.some(b => !/^\d{4}-\d{2}-\d{2}$/.test(b.startDate) || !finite(b.tokens))) throw new Error('Codex returned an invalid history bucket.');
   const firstDate = Array.isArray(buckets) && buckets.length ? buckets.map(b => b.startDate).sort()[0] : null;
-  const hasHistory = Array.isArray(buckets) && (!firstDate || month >= firstDate.slice(0, 7));
+  const hasHistory = Array.isArray(buckets) && (!buckets.length || buckets.some(b => b.startDate.slice(0, 7) === month));
   const daily = dailySeries(month, (usage?.dailyUsageBuckets ?? []).map(b => ({ date: b.startDate, value: b.tokens })));
   return { windows, daily, monthly: hasHistory ? daily.reduce((a, b) => a + b.value, 0) : null, unit: 'tokens', plan: root?.planType ?? null,
     coverage: hasHistory ? 'Provider-reported Codex activity · UTC' : 'Selected month is outside the returned activity history.', historyAvailable: hasHistory, partial: !!firstDate && month === firstDate.slice(0, 7) && !firstDate.endsWith('-01') };

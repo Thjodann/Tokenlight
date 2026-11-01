@@ -59,3 +59,14 @@ test('a superseded in-flight response cannot replace the new credential reading'
   assert.equal(service.inflight.size, 0);
   assert.equal(service.busy.size, 0);
 });
+
+
+test('network failure keeps the last valid total with a stale state', async () => {
+  class ProviderError extends Error { constructor() { super('Network unavailable'); this.code = 'network'; } }
+  const service = createService({ ProviderError, loadCredentials: async () => ({ openai: 'fixture-key' }), readProvider: async () => { throw new ProviderError(); } });
+  service.cache['2026-10:openai'] = { monthly: 123, scope: cachePolicy.fingerprint('fixture-key'), lastUpdatedAt: Date.now() - 600000 };
+  service.emit = () => {};
+  await service.refresh('openai', true);
+  assert.equal(service.snapshot().cards[0].monthly, 123);
+  assert.equal(service.snapshot().cards[0].status, 'stale');
+});
