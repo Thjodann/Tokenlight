@@ -28,10 +28,11 @@ test('OpenAI follows pagination and combines embeddings with completions', async
   const original = globalThis.fetch, requests = [];
   globalThis.fetch = async url => {
     const u = new URL(url); requests.push(u);
+    if (u.pathname.endsWith('/costs')) return response({ data: [{ results: [{ amount: { value: 1.23, currency: 'usd' } }] }], has_more: false });
     if (u.pathname.endsWith('/embeddings')) return response({ data: [{ start_time: Date.UTC(2026, 9, 1) / 1000, results: [{ input_tokens: 50 }] }], has_more: false });
     return response({ data: [{ start_time: Date.UTC(2026, 9, u.searchParams.has('page') ? 2 : 1) / 1000, results: [{ input_tokens: 100, input_cached_tokens: 40, output_tokens: 20 }] }], has_more: !u.searchParams.has('page'), next_page: 'second' });
   };
-  try { const v = await readProvider('openai', '2026-10', { credentials: { openai: 'test-credential' } }); assert.equal(v.monthly, 290); assert.equal(requests.length, 3); assert.equal(v.breakdown.cache, 80); }
+  try { const v = await readProvider('openai', '2026-10', { credentials: { openai: 'test-credential' } }); assert.equal(v.monthly, 290); assert.equal(requests.length, 4); assert.equal(v.apiCost.total, 1.23); assert.ok(requests.filter(u => u.pathname.includes('/usage/')).every(u => u.searchParams.get('group_by[]') === 'model')); assert.equal(v.breakdown.cache, 80); }
   finally { globalThis.fetch = original; }
 });
 test('truncated pagination never publishes an apparently complete total', async () => {
@@ -57,4 +58,10 @@ test('provider retry-after sets a finite cooldown', async () => {
   globalThis.fetch = async () => new Response('', { status: 429, headers: { 'retry-after': '120' } });
   try { await assert.rejects(fetchJSON('https://example.test'), e => e.code === 'rate_limit' && e.retryAt >= Date.now() + 119000); }
   finally { globalThis.fetch = original; }
+});
+
+test('model attribution and provider list-price value survive the Anthropic reporting path',async()=>{
+ const original=globalThis.fetch;
+ globalThis.fetch=async url=>new URL(url).pathname.endsWith('/cost')?response({data:[{group:{model:'claude-sonnet-5-5'},cost:{amount:'100.000000',list_amount:'200.000000',currency:'USD'}}],has_more:false,data_refreshed_at:'2026-10-31T12:00:00Z'}):response({data:[{starting_at:'2026-10-02T00:00:00Z',group:{model:'claude-sonnet-5-5'},usage:{uncached_input_tokens:100,output_tokens:50,requests:2}}],has_more:false,data_refreshed_at:'2026-10-31T12:00:00Z'});
+ try{const r=await readProvider('anthropic','2026-10',{credentials:{anthropic:'fixture'}});assert.equal(r.modelUsage[0].model,'claude-sonnet-5-5');assert.equal(r.requestCount,2);assert.equal(r.apiCost.total,1);assert.equal(r.apiCost.models[0].listAmount,2);}finally{globalThis.fetch=original;}
 });

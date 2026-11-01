@@ -1,3 +1,5 @@
+import { activityRow, aggregateActivity } from './activity.mjs';
+import { openaiCosts } from './openai-cost.mjs';
 import { normalizeOllama } from './ollama.mjs';
 import { anthropicCosts } from './anthropic-cost.mjs';
 import { spawn, execFile } from 'node:child_process';
@@ -127,8 +129,8 @@ async function cursor(month, ctx) {
   if (expected != null && events.length < expected) throw new ProviderError('Cursor returned incomplete history. Your previous reading is kept.', 'coverage');
   return { ...normalizeCursor(summary, events, month), scope: session.scope, sourceLabel: 'Cursor desktop account · dashboard data', connectionNote: 'Uses your local Cursor session. This personal dashboard interface can change independently of the public API.' };
 }
-async function claudeLocal(month) {
-  const { start, end } = monthRange(month), root = join(homedir(), '.claude/projects'), files = [], records = new Map(); let bytes = 0, partial = false;
+export async function claudeLocal(month, root = join(homedir(), '.claude/projects')) {
+  const { start, end } = monthRange(month), files = [], records = new Map(); let bytes = 0, partial = false;
   async function walk(dir, depth = 0) {
     if (depth > 6) { partial = true; return; }
     let entries; try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
@@ -152,12 +154,12 @@ async function claudeLocal(month) {
         const when = Date.parse(row.timestamp); if (!(when >= start && when < end)) continue;
         let tokens; try { tokens = tokenRow(row.message.usage, 'anthropic'); } catch { partial = true; continue; }
         const key = row.message.id ? `${row.requestId ?? row.request_id ?? row.sessionId ?? f.path}:${row.message.id}` : `${f.path}:${records.size}`;
-        records.set(key, { date: new Date(when).toISOString().slice(0, 10), value: tokens.total });
+        records.set(key, { date: new Date(when).toISOString().slice(0, 10), value: tokens.total, activity: activityRow(row.message.usage, 'anthropic', row.message.model, 1) });
       }
     } catch { partial = true; } finally { lines.close(); stream.destroy(); }
   }
   const daily = dailySeries(month, [...records.values()]);
-  return { daily, monthly: records.size ? daily.reduce((a, b) => a + b.value, 0) : null, partial, scannedFiles: files.length };
+  return { daily, monthly: records.size ? daily.reduce((a, b) => a + b.value, 0) : null, partial, scannedFiles: files.length, modelUsage: aggregateActivity([...records.values()].map(r => r.activity)), requestCount: records.size || null };
 }
 async function claude(month, ctx) {
   let record;
@@ -175,7 +177,7 @@ async function claude(month, ctx) {
 async function apiUsage(id, month, ctx) {
   const key = ctx.credentials[id];
   if (!key) throw new ProviderError(`Add ${id === 'openai' ? 'OPENAI_ADMIN_KEY' : 'ANTHROPIC_ADMIN_KEY'} in your secrets file or save a reporting key here.`, 'setup');
-  const { start, end } = monthRange(month), daily = [], breakdown = { input: 0, output: 0, cache: 0 }; let asOf = null;
+  const { start, end } = monthRange(month), daily = [], activity = [], breakdown = { input: 0, output: 0, cache: 0 }; let asOf = null;
   const endpoints = id === 'openai' ? ['completions', 'embeddings'] : ['analytics'];
   for (const endpoint of endpoints) {
     let page = null;
@@ -183,6 +185,7 @@ async function apiUsage(id, month, ctx) {
       const url = id === 'openai' ? new URL(`https://api.openai.com/v1/organization/usage/${endpoint}`) : new URL('https://api.anthropic.com/v1/organizations/analytics/usage');
       if (id === 'openai') { url.searchParams.set('start_time', Math.floor(start / 1000)); url.searchParams.set('end_time', Math.floor(Math.min(end, Date.now()) / 1000)); url.searchParams.set('bucket_width', '1d'); url.searchParams.set('limit', '31'); }
       else { url.searchParams.set('starting_at', new Date(start).toISOString()); url.searchParams.set('ending_at', new Date(end).toISOString()); url.searchParams.set('time_bucket_width', '1d'); url.searchParams.set('order_by', 'time'); url.searchParams.set('order', 'asc'); url.searchParams.set('limit', '1000'); }
+      url.searchParams.set('group_by[]', 'model');
       if (page) url.searchParams.set('page', page);
       const headers = id === 'openai' ? { Authorization: `Bearer ${key}` } : { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'analytics-usage-cost-2026-08-24' };
       let data;
@@ -191,11 +194,14 @@ async function apiUsage(id, month, ctx) {
       if (data.data_refreshed_at) asOf = data.data_refreshed_at;
       for (const bucket of data.data) {
         const date = id === 'openai' ? new Date(bucket.start_time * 1000).toISOString().slice(0, 10) : bucket.starting_at?.slice(0, 10);
+        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new ProviderError('The provider returned an invalid usage date.', 'format');
+        if (!date.startsWith(month + '-')) continue;
         const rows = id === 'openai' ? bucket.results : [bucket.usage];
         if (!Array.isArray(rows)) throw new ProviderError('The provider returned incomplete usage buckets.', 'format');
         for (const row of rows) {
           if (!row) throw new ProviderError('A usage row was missing.', 'format');
           const normalized = endpoint === 'embeddings' ? tokenRow({ ...row, output_tokens: 0 }, 'openai') : tokenRow(row, id);
+          activity.push(activityRow(endpoint === 'embeddings' ? { ...row, output_tokens: 0 } : row, id, id === 'openai' ? row.model : bucket.group?.model, id === 'openai' ? row.num_model_requests : row.requests));
           daily.push({ date, value: normalized.total }); for (const k of Object.keys(breakdown)) breakdown[k] += normalized[k];
         }
       }
@@ -206,11 +212,12 @@ async function apiUsage(id, month, ctx) {
   }
   const series = dailySeries(month, daily), total = series.reduce((a, b) => a + b.value, 0);
   let apiCost = null, costNote = null;
-  if (id === 'anthropic') {
-    try { apiCost = await anthropicCosts(month, fetchJSON, { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'analytics-usage-cost-2026-08-24' }); }
+  {
+    try { apiCost = id === 'openai' ? await openaiCosts(month, fetchJSON, { Authorization: `Bearer ${key}` }) : await anthropicCosts(month, fetchJSON, { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'analytics-usage-cost-2026-08-24' }); }
     catch { costNote = 'Model spending could not be read. Token usage is still available; no cost is inferred.'; }
   }
   return { daily: series, monthly: id === 'anthropic' && !asOf && !series.length ? null : total, unit: 'tokens', breakdown, windows: [], scope: identity(key), sourceLabel: 'Organization usage API', asOf,
+    modelUsage: aggregateActivity(activity), requestCount: activity.every(r => finite(r.calls)) && (activity.length || id === 'openai' || asOf) ? activity.reduce((n,r) => n+r.calls, 0) : null,
     apiCost, costNote, creditNote: 'This reporting connection does not expose a prepaid credit balance.' + (id === 'anthropic' ? ' API costs are after discounts and before credits; they are separate from Claude subscription credit spending.' : ''),
     partial: id === 'anthropic' && !asOf, coverage: id === 'openai' ? 'Completions & embeddings · organization · UTC' : 'Organization token usage · UTC. Provider reporting may be delayed.' };
 }

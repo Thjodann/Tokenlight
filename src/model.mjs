@@ -1,3 +1,4 @@
+import { activityRow, aggregateActivity } from './activity.mjs';
 import { codexCredits, claudeCredits } from './account-credits.mjs';
 export const SOURCES = [
   { id: 'codex', title: 'Codex', organization: 'OpenAI', kind: 'account', color: '#167962', initials: 'Cx', dashboard: 'https://chatgpt.com/codex/settings/usage', description: 'Your Codex account activity and current allowance.' },
@@ -32,10 +33,11 @@ export function aggregateCursor(events) {
   for (const e of events) {
     if (e.usageEventId) unique.set(e.usageEventId, e); else anonymous.push(e);
   }
-  const rows = [...unique.values(), ...anonymous], daily = [], breakdown = { input: 0, output: 0, cache: 0 };
+  const rows = [...unique.values(), ...anonymous], daily = [], activity = [], breakdown = { input: 0, output: 0, cache: 0 };
   let withTokens = 0;
   for (const e of rows) {
     const u = e.tokenUsage;
+    activity.push(activityRow(u || {}, 'cursor', e.model, 1));
     if (!u || !finite(u.inputTokens) || !finite(u.outputTokens)) continue;
     if (['cacheWriteTokens', 'cacheReadTokens'].some(k => u[k] != null && !finite(u[k]))) throw new Error('Cursor returned an invalid token count.');
     const cache = (u.cacheWriteTokens ?? 0) + (u.cacheReadTokens ?? 0), input = u.inputTokens, output = u.outputTokens;
@@ -45,7 +47,7 @@ export function aggregateCursor(events) {
     breakdown.input += input; breakdown.output += output; breakdown.cache += cache;
     daily.push({ date: when.toISOString().slice(0, 10), value: input + output + cache });
   }
-  return { daily, breakdown, withTokens, events: rows.length, partial: withTokens !== rows.length };
+  return { daily, breakdown, modelUsage: aggregateActivity(activity), requestCount: rows.length, withTokens, events: rows.length, partial: withTokens !== rows.length };
 }
 export function tokenRow(row, family) {
   if (family === 'openai') {
@@ -92,7 +94,9 @@ export function normalizeClaude(usage) {
   return { ...credits, windows, daily: [], monthly: null, unit: 'tokens', coverage: 'Account allowance · rolling windows', partial: false };
 }
 export function normalizeCursor(summary, events, month) {
-  const aggregate = aggregateCursor(events), p = summary.individualUsage?.plan;
+  const range = monthRange(month);
+  const inMonth = events.filter(e => { const t = Number(e.timestamp); return !Number.isFinite(t) || (t >= range.start && t < range.end); });
+  const aggregate = aggregateCursor(inMonth), p = summary.individualUsage?.plan;
   const windows = [];
   const resetsAt = Number.isFinite(Date.parse(summary.billingCycleEnd)) ? Date.parse(summary.billingCycleEnd) : null;
   if (p?.enabled) {
@@ -105,7 +109,7 @@ export function normalizeCursor(summary, events, month) {
   }
   const daily = dailySeries(month, aggregate.daily);
   return { windows, daily, monthly: aggregate.events === 0 || aggregate.withTokens > 0 ? daily.reduce((a, b) => a + b.value, 0) : null, unit: 'tokens',
-    plan: summary.membershipType, breakdown: aggregate.breakdown, partial: aggregate.partial,
+    plan: summary.membershipType, breakdown: aggregate.breakdown, modelUsage: aggregate.modelUsage, requestCount: aggregate.requestCount, partial: aggregate.partial,
     allowanceNote: windows.some(w => w.pool) ? `Current billing-cycle allowances, separate from the selected calendar month's tokens.${windows.length === 1 ? ' Cursor did not report the other pool.' : ''}` : null,
     coverage: aggregate.partial ? `${aggregate.withTokens} of ${aggregate.events} events include tokens · UTC` : 'Account-wide reported events · UTC',
     billingStart: summary.billingCycleStart, billingEnd: summary.billingCycleEnd };

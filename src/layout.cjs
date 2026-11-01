@@ -14,7 +14,7 @@ class LayoutController {
     if (mode === 'mini' && this.mode !== 'mini') {
       const size = this.window.getSize(), [width, height] = size;
       // Automatically compact windows are not useful full-dashboard restore points.
-      if (width >= 360 && height > 320 && (width > 440 || height > 440)) this.dashboardSize = size;
+      if ((width >= 360 && height > 320 && (width > 440 || height > 440)) || (width >= 1000 && width / height >= 2.4)) this.dashboardSize = size;
     }
     this.window.setSize(...(mode === 'mini' ? SIZES.mini : this.dashboardSize || SIZES.dashboard));
     this.mode = mode;

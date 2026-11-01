@@ -31,9 +31,12 @@ export async function anthropicCosts(month, request, headers) {
       const amount = micros(row.cost.amount);
       const model = row.group?.model ?? 'Unattributed';
       if (typeof model !== 'string' || model.length > 200) throw new Error('Invalid model');
-      models.set(model, (models.get(model) || 0n) + amount);
+      const previous = models.get(model) || { amount: 0n, listAmount: 0n, hasList: true };
+      previous.amount += amount;
+      try { previous.listAmount += micros(row.cost.list_amount); } catch { previous.hasList = false; }
+      models.set(model, previous);
     }
-    if (!data.has_more) return { total: !models.size && !asOf ? null : dollars([...models.values()].reduce((a, b) => a + b, 0n)), models: [...models].map(([model, amount]) => ({ model, amount: dollars(amount) })), asOf, month, unit: 'USD' };
+    if (!data.has_more) return { total: !models.size && !asOf ? null : dollars([...models.values()].reduce((a, b) => a + b.amount, 0n)), models: [...models].map(([model, amount]) => ({ model, amount: dollars(amount.amount), listAmount: amount.hasList ? dollars(amount.listAmount) : null })), asOf, month, unit: 'USD' };
     if (!data.next_page || data.next_page === page || iteration === 99) throw new Error('Incomplete cost pagination');
     page = data.next_page;
   }

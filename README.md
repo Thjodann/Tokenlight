@@ -72,3 +72,9 @@ OpenAI/Codex share teal, Anthropic/Claude share terracotta, Cursor is violet, El
 Click **Mini** or choose **View → Mini dashboard** (⌘⇧M) for a small, persistent monitor. **Full** restores the dashboard size. The app automatically uses mini rows below 360 pixels wide, at heights of 320 pixels or less, or in windows no larger than 440×440. Narrow portrait windows such as 390×740 retain full cards. Mini always lists all seven sources, regardless of the full dashboard filter. At 320×240 it is designed as a compact monitor; at the 260×180 minimum, rows and detail sheets scroll.
 
 Mini's left metric is selected-month activity when reported, otherwise a current allowance percentage. `~` marks incomplete history. Its right metric is the first reported credit balance or allowance value, or explicitly labeled API cost. Hover or open a row for its meaning; other balances, reset passes, Cursor pools and Fable detail remain in the source sheet. A dash means unreported, not zero. Current allowances and balances remain current when viewing a historical month. Refresh, connections and color mode remain accessible in mini.
+
+## Spending and ultrawide layouts (0.5.0)
+
+The **Insights** tab shows known monthly costs separately from reported or estimated usage value, plus recorded activity rankings, the most-used model and optional account age. In a source sheet, enter a monthly plan fee, a one-month metered-cost override or the actual account start date. These records stay local and never change billing. Unknown sources remain visibly excluded; provider costs are before account credits and tax.
+
+Wide, short windows (at least 1000 px wide with an aspect ratio of at least 2.4) automatically use a horizontal instrument layout. Explicit Mini remains available, and Full restores a useful previous wide size. Inspect [spending definitions and pricing provenance](docs/spending-and-insights.md) for scope, exclusions, supported estimates and known data limits.

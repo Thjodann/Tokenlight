@@ -49,7 +49,7 @@ test('Anthropic cost pagination preserves fractional cents and separates Fable c
   const calls = [];
   const cost = await anthropicCosts('2026-10', async url => { calls.push(url); return calls.length === 1 ? { data: [{ group: { model: 'claude-fable-5-1' }, cost: { amount: '1250.500000', currency: 'USD' } }], has_more: true, next_page: 'next', data_refreshed_at: '2026-10-31T10:00:00Z' } : { data: [{ group: { model: 'claude-sonnet-5-5' }, cost: { amount: '500.000000', currency: 'USD' } }], has_more: false }; }, {});
   assert.equal(cost.total, 17.505); assert.equal(calls[1].searchParams.get('page'), 'next'); assert.equal(calls[0].searchParams.get('group_by[]'), 'model');
-  assert.match(creditSection({ apiCost: cost }), /Fable API cost/); assert.match(creditSection({ apiCost: cost }), /\$12.51/);
+  assert.match(creditSection({ id: 'anthropic', apiCost: cost }), /Fable API cost/); assert.match(creditSection({ id: 'anthropic', apiCost: cost }), /\$12.51/);
 });
 test('empty, missing, malformed and truncated cost reports do not fabricate charges', async () => {
   assert.equal((await anthropicCosts('2026-10', async () => ({ data: [], has_more: false }), {})).total, null);

@@ -10,7 +10,7 @@ const { cacheAllowed, reconcileCredentials } = require('./credential-cache.cjs')
 if (process.env.TOKENLIGHT_PROFILE && path.isAbsolute(process.env.TOKENLIGHT_PROFILE)) app.setPath('userData', process.env.TOKENLIGHT_PROFILE);
 const single = app.requestSingleInstanceLock();
 if (!single) app.quit();
-let window, model, providers, fixture, service, layoutController;
+let window, model, providers, fixture, service, layoutController, insights;
 const ownChildren = new Set();
 app.on('second-instance', () => { if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } });
 app.on('before-quit', () => { for (const child of ownChildren) child.kill('SIGTERM'); });
@@ -46,7 +46,20 @@ class Service {
     });
     return { month: this.month, demo: this.demo, cards, version: app.getVersion(), updatedAt: Date.now(), fileError: this.fileError, vaultError: this.vaultError,
       appearance: { dark: nativeTheme.shouldUseDarkColors },
-      settings: { secretsPath: this.settings.secretsPath, refreshMinutes: this.settings.refreshMinutes, colorMode: this.settings.colorMode, layoutMode: this.settings.layoutMode, targets: this.settings.targets, savedKeys: Object.keys(this.vault) } };
+      settings: { secretsPath: this.settings.secretsPath, refreshMinutes: this.settings.refreshMinutes, colorMode: this.settings.colorMode, layoutMode: this.settings.layoutMode, accountProfiles: this.settings.accountProfiles || {}, targets: this.settings.targets, savedKeys: Object.keys(this.vault) } };
+  }
+  async setAccountProfile(id, value) {
+    if (!model.SOURCES.some(s => s.id === id)) throw new Error('Unknown source.');
+    this.profileWrites = (this.profileWrites || Promise.resolve()).catch(() => {}).then(async () => {
+      const previous = this.settings.accountProfiles;
+      const next = insights.applyProfileChange(this.settings, id, value);
+      // Keep the shared settings object so appearance and layout edits also survive.
+      this.settings.accountProfiles = next;
+      try { await this.persist('settings.json', this.settings); }
+      catch (error) { if (previous === undefined) delete this.settings.accountProfiles; else this.settings.accountProfiles = previous; this.emit(); throw error; }
+      this.emit(); return this.snapshot();
+    });
+    return this.profileWrites;
   }
   async setLayoutMode(mode) {
     if (!LAYOUTS.includes(mode)) throw new Error('Choose Dashboard or Mini.');
@@ -122,7 +135,7 @@ class Service {
 
 app.whenReady().then(async () => {
   app.setAccessibilitySupportEnabled(true);
-  [model, providers, fixture] = await Promise.all([import('./model.mjs'), import('./providers.mjs'), import('./fixtures.mjs')]);
+  [model, providers, fixture, insights] = await Promise.all([import('./model.mjs'), import('./providers.mjs'), import('./fixtures.mjs'), import('./insights.mjs')]);
   service = new Service(); await service.init();
   applyColorMode(service.settings.colorMode, nativeTheme);
   const [width, height] = initialSize(process.env.TOKENLIGHT_WINDOW_SIZE, service.settings.layoutMode);
@@ -135,11 +148,12 @@ app.whenReady().then(async () => {
   const handle = (channel, fn) => ipcMain.handle(channel, async (event, ...args) => {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) throw new Error('Unknown caller.');
     try { return { ok: true, value: await fn(...args) }; }
-    catch (e) { return { ok: false, error: e instanceof providers.ProviderError ? e.message : ['save-key', 'set-target'].includes(channel) ? e.message : 'The action could not finish. Please try again.' }; }
+    catch (e) { return { ok: false, error: e instanceof providers.ProviderError ? e.message : ['save-key', 'set-target', 'set-account-profile'].includes(channel) ? e.message : 'The action could not finish. Please try again.' }; }
   });
   handle('get-snapshot', () => service.snapshot());
   handle('set-appearance', mode => service.setColorMode(mode));
   handle('set-layout', mode => service.setLayoutMode(mode));
+  handle('set-account-profile', (id, value) => service.setAccountProfile(id, value));
   nativeTheme.on('updated', () => { window.setBackgroundColor(backgroundColor(nativeTheme.shouldUseDarkColors)); service.emit(); });
   handle('refresh', id => service.refresh(id, true));
   handle('set-month', async month => { model.monthRange(month); if (month > model.currentMonth() || month < '2020-01') throw new providers.ProviderError(`Choose a month from January 2020 through ${new Date(model.currentMonth() + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}.`, 'validation'); service.month = month; service.followCurrent = month === model.currentMonth(); service.emit(); service.refresh(); return service.snapshot(); });
@@ -150,7 +164,7 @@ app.whenReady().then(async () => {
     if (!result.canceled && result.filePaths[0]) { service.settings.secretsPath = result.filePaths[0]; await service.persist('settings.json', service.settings); await service.refresh(null, true); }
     return service.snapshot();
   });
-  handle('open-provider', async (id, purpose) => { const source = model.SOURCES.find(s => s.id === id); if (!source) return; await shell.openExternal(purpose === 'credentials' && source.credentialUrl ? source.credentialUrl : source.dashboard); });
+  handle('open-provider', async (id, purpose) => { const source = model.SOURCES.find(s => s.id === id); if (!source) return; if (purpose === 'pricing') { if (['openai', 'anthropic'].includes(id)) await shell.openExternal(id === 'openai' ? 'https://developers.openai.com/api/docs/pricing' : 'https://platform.claude.com/docs/en/about-claude/pricing'); return; } await shell.openExternal(purpose === 'credentials' && source.credentialUrl ? source.credentialUrl : source.dashboard); });
   handle('connect', id => service.refresh(id, true, true));
   handle('demo', async enabled => { service.demo = !!enabled; service.emit(); if (!enabled) service.refresh(null, true); return service.snapshot(); });
   handle('sign-in-claude', async () => {
@@ -167,7 +181,7 @@ app.whenReady().then(async () => {
   });
   handle('export', async () => {
     const r = await dialog.showSaveDialog(window, { title: 'Export usage snapshot', defaultPath: `Tokenlight-${service.month}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
-    if (!r.canceled && r.filePath) { const { cards, month, demo } = service.snapshot(); await fs.writeFile(r.filePath, JSON.stringify({ month, demo, exportedAt: new Date().toISOString(), sources: cards.map(({ scope, ...c }) => c) }, null, 2), { mode: 0o600 }); return 'Snapshot exported.'; }
+    if (!r.canceled && r.filePath) { const snapshot = service.snapshot(), { cards, month, demo } = snapshot; await fs.writeFile(r.filePath, JSON.stringify({ month, demo, exportedAt: new Date().toISOString(), insights: insights.monthlyInsights(snapshot), sources: cards.map(({ scope, ...c }) => c) }, null, 2), { mode: 0o600 }); return 'Snapshot exported.'; }
     return null;
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate([

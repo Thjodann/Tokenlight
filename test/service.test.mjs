@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
+import * as insightModel from '../src/insights.mjs';
 import cachePolicy from '../src/credential-cache.cjs';
 
 // Exercise the actual service while leaving Electron's window/bootstrap dormant.
@@ -16,11 +17,11 @@ function createService(providers) {
     app: { requestSingleInstanceLock: () => true, on() {}, whenReady: () => ({ then() {} }), getVersion: () => 'test' },
     nativeTheme: { shouldUseDarkColors: false }, Menu: {}
   };
-  vm.runInNewContext(main + '\nmodule.exports = { Service, inject(value) { model = value.model; providers = value.providers; } };', {
+  vm.runInNewContext(main + '\nmodule.exports = { Service, inject(value) { model = value.model; providers = value.providers; insights = value.insights; } };', {
     require: id => id === 'electron' ? electron : require(id), module,
     process: { env: {}, argv: [] }, __dirname: fileURLToPath(new URL('../src/', import.meta.url))
   });
-  module.exports.inject({ model: { currentMonth: () => '2026-10', SOURCES: [{ id: 'openai', kind: 'api' }] }, providers });
+  module.exports.inject({ model: { currentMonth: () => '2026-10', SOURCES: [{ id: 'openai', kind: 'api' }] }, providers, insights: insightModel });
   const service = new module.exports.Service();
   service.settings = { secretsPath: null, targets: {}, refreshMinutes: 5, keychainAllowed: {} };
   service.persist = async () => {};
@@ -83,4 +84,23 @@ test('layout preference persists without changing the reporting month or targets
   await assert.rejects(service.setLayoutMode('bad'));
   assert.equal(service.settings.layoutMode, 'mini'); assert.equal(writes.length, 1);
   await service.setLayoutMode('dashboard'); assert.equal(service.snapshot().settings.layoutMode, 'dashboard');
+});
+
+test('local financial records persist without touching credentials, period or targets',async()=>{
+ const s=createService({});s.emit=()=>{};s.settings.targets={openai:999};s.vault={openai:'fixture-only'};
+ await s.setAccountProfile('openai',{field:'fee',month:'2026-10',value:20});
+ assert.equal(s.settings.accountProfiles.openai.fees['2026-10'],20);assert.equal(s.vault.openai,'fixture-only');assert.equal(s.month,'2026-10');assert.equal(s.settings.targets.openai,999);
+ await assert.rejects(s.setAccountProfile('unknown',{field:'fee',month:'2026-10',value:0}));
+ const saved=s.settings;s.persist=async()=>{throw new Error('fixture write failure')};
+ await assert.rejects(s.setAccountProfile('openai',{field:'metered',month:'2026-10',value:1}));assert.equal(s.settings,saved);
+});
+
+test('overlapping fee and charge saves retain both fields and concurrent appearance edits',async()=>{
+ const s=createService({});s.emit=()=>{};let release;const gate=new Promise(r=>{release=r;});let writes=0;
+ s.persist=async()=>{if(++writes===1)await gate;};
+ const first=s.setAccountProfile('openai',{field:'fee',month:'2026-10',value:20});
+ await Promise.resolve();
+ const second=s.setAccountProfile('openai',{field:'metered',month:'2026-10',value:30});
+ s.settings.colorMode='light';release();await Promise.all([first,second]);
+ assert.equal(s.settings.accountProfiles.openai.fees['2026-10'],20);assert.equal(s.settings.accountProfiles.openai.metered['2026-10'],30);assert.equal(s.settings.colorMode,'light');
 });
