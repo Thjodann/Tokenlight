@@ -4,7 +4,8 @@ export const SOURCES = [
   { id: 'cursor', title: 'Cursor', organization: 'Cursor', kind: 'account', color: '#6c60a4', initials: 'Cu', dashboard: 'https://cursor.com/dashboard/usage', description: 'Account-wide usage reported by your Cursor dashboard.' },
   { id: 'openai', title: 'OpenAI API', organization: 'OpenAI', kind: 'api', color: '#317860', initials: 'Oa', dashboard: 'https://platform.openai.com/usage', credentialUrl: 'https://platform.openai.com/settings/organization/admin-keys', description: 'Organization usage, including calls made outside this app.' },
   { id: 'anthropic', title: 'Anthropic API', organization: 'Anthropic', kind: 'api', color: '#bc7052', initials: 'An', dashboard: 'https://platform.claude.com/usage', credentialUrl: 'https://platform.claude.com/settings/admin-keys', description: 'Organization usage, including calls made outside this app.' },
-  { id: 'elevenlabs', title: 'ElevenLabs', organization: 'ElevenLabs', kind: 'api', color: '#476a9a', initials: '11', dashboard: 'https://elevenlabs.io/app/developers/analytics', credentialUrl: 'https://elevenlabs.io/app/settings/api-keys', description: 'Credit usage and your subscription’s current allowance.' }
+  { id: 'elevenlabs', title: 'ElevenLabs', organization: 'ElevenLabs', kind: 'api', color: '#476a9a', initials: '11', dashboard: 'https://elevenlabs.io/app/developers/analytics', credentialUrl: 'https://elevenlabs.io/app/settings/api-keys', description: 'Credit usage and your subscription’s current allowance.' },
+  { id: 'ollama', title: 'Ollama Cloud', organization: 'Ollama', kind: 'api', color: '#687987', initials: 'Ol', dashboard: 'https://ollama.com/settings', credentialUrl: 'https://ollama.com/settings/keys', description: 'Cloud token usage and your included and purchased credit balances.' },
 ];
 export const finite = x => typeof x === 'number' && Number.isFinite(x) && x >= 0;
 export function monthRange(month) {
@@ -89,10 +90,19 @@ export function normalizeClaude(usage) {
 export function normalizeCursor(summary, events, month) {
   const aggregate = aggregateCursor(events), p = summary.individualUsage?.plan;
   const windows = [];
-  if (p?.enabled && finite(p.totalPercentUsed)) windows.push({ label: 'Billing cycle', percent: p.totalPercentUsed, resetsAt: Number.isFinite(Date.parse(summary.billingCycleEnd)) ? Date.parse(summary.billingCycleEnd) : null });
+  const resetsAt = Number.isFinite(Date.parse(summary.billingCycleEnd)) ? Date.parse(summary.billingCycleEnd) : null;
+  if (p?.enabled) {
+    // Cursor reports these pools independently. totalPercentUsed can hide an
+    // exhausted third-party allowance; never derive either pool from it.
+    for (const [field, label, pool] of [['autoPercentUsed', 'Grok / Composer', 'cursor'], ['apiPercentUsed', 'Third-party models', 'thirdParty']]) {
+      if (finite(p[field])) windows.push({ label, pool, percent: p[field], resetsAt });
+    }
+    if (!windows.length && finite(p.totalPercentUsed)) windows.push({ label: 'Billing cycle', percent: p.totalPercentUsed, resetsAt });
+  }
   const daily = dailySeries(month, aggregate.daily);
   return { windows, daily, monthly: aggregate.events === 0 || aggregate.withTokens > 0 ? daily.reduce((a, b) => a + b.value, 0) : null, unit: 'tokens',
     plan: summary.membershipType, breakdown: aggregate.breakdown, partial: aggregate.partial,
+    allowanceNote: windows.some(w => w.pool) ? `Current billing-cycle allowances, separate from the selected calendar month's tokens.${windows.length === 1 ? ' Cursor did not report the other pool.' : ''}` : null,
     coverage: aggregate.partial ? `${aggregate.withTokens} of ${aggregate.events} events include tokens · UTC` : 'Account-wide reported events · UTC',
     billingStart: summary.billingCycleStart, billingEnd: summary.billingCycleEnd };
 }

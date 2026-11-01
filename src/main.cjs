@@ -83,7 +83,7 @@ class Service {
       const task = (async () => {
         this.busy.add(key); this.emit();
         try {
-          const result = await providers.readProvider(sourceId, month, { credentials, resourcePath: app.isPackaged ? process.resourcesPath : path.join(__dirname, '..'), allowKeychain: allowKeychain || !!this.settings.keychainAllowed[sourceId] });
+          const result = await providers.readProvider(sourceId, month, { credentials, previousReading: this.cache[key], resourcePath: app.isPackaged ? process.resourcesPath : path.join(__dirname, '..'), allowKeychain: allowKeychain || !!this.settings.keychainAllowed[sourceId] });
           if (!current()) return;
           this.cache[key] = { ...result, lastUpdatedAt: Date.now() }; delete this.errors[key];
           if (allowKeychain) { this.settings.keychainAllowed[sourceId] = true; await this.persist('settings.json', this.settings); }
@@ -98,7 +98,7 @@ class Service {
     return this.snapshot();
   }
   async saveKey(id, key) {
-    if (!['openai', 'anthropic', 'elevenlabs'].includes(id)) throw new Error('Unknown provider.');
+    if (!['openai', 'anthropic', 'elevenlabs', 'ollama'].includes(id)) throw new Error('Unknown provider.');
     if (typeof key !== 'string' || key.length < 12 || key.length > 10000 || /\s/.test(key)) throw new Error('Enter a valid API key without spaces.');
     if (!await safeStorage.isAsyncEncryptionAvailable()) throw new Error('macOS secure storage is unavailable. Your key was not saved.');
     const next = { ...this.vault, [id]: key };

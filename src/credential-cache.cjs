@@ -1,5 +1,5 @@
 const { createHash } = require('node:crypto');
-const API_SOURCES = ['openai', 'anthropic', 'elevenlabs'];
+const API_SOURCES = ['openai', 'anthropic', 'elevenlabs', 'ollama'];
 const fingerprint = key => key ? createHash('sha256').update(key).digest('hex').slice(0, 20) : null;
 const cacheAllowed = (id, entry, scopes) => !API_SOURCES.includes(id) || Boolean(scopes[id] && entry?.scope === scopes[id]);
 

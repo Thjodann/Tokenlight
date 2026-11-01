@@ -1,3 +1,4 @@
+import { normalizeOllama } from './ollama.mjs';
 import { spawn, execFile } from 'node:child_process';
 import { promisify, parseEnv } from 'node:util';
 import { readFile, readdir, stat, access } from 'node:fs/promises';
@@ -14,6 +15,7 @@ export class ProviderError extends Error {
 }
 const identity = value => createHash('sha256').update(value).digest('hex').slice(0, 20);
 export const KEY_NAMES = {
+  ollama: ['OLLAMA_CLOUD_API_KEY', 'OLLAMA_API_KEY'],
   openai: ['OPENAI_ADMIN_KEY', 'OPENAI_ADMIN_API_KEY', 'OPEN_AI_ADMIN_KEY', 'OPENAI_API_KEY'],
   anthropic: ['ANTHROPIC_ADMIN_KEY', 'ANTHROPIC_ADMIN_API_KEY', 'ANTHROPIC_API_KEY'],
   elevenlabs: ['ELEVENLABS_API_KEY', 'ELEVEN_LABS_API_KEY', 'ELEVEN_API_KEY', 'ELEVENLABS_KEY']
@@ -223,6 +225,14 @@ async function elevenlabs(month, ctx) {
   return { ...normalizeEleven(sub, daily, month), scope: identity(key), sourceLabel: 'ElevenLabs usage API', historyNote };
 }
 export async function readProvider(id, month, ctx) {
+  if (id === 'ollama') {
+    const key = ctx.credentials.ollama;
+    if (!key) throw new ProviderError('Add OLLAMA_CLOUD_API_KEY or save an Ollama API key here.', 'setup');
+    const headers = { Authorization: `Bearer ${key}` };
+    const [usage, balance] = await Promise.all([fetchJSON('https://ollama.com/api/usage?range=30d&group_by=model', headers), fetchJSON('https://ollama.com/api/balance', headers)]);
+    try { return { ...normalizeOllama(usage, balance, month, ctx.previousReading), scope: identity(key), sourceLabel: 'Ollama Cloud usage and balance API' }; }
+    catch { throw new ProviderError('Ollama returned an unfamiliar usage or balance format. Your last reading is kept.', 'format'); }
+  }
   if (id === 'codex') return codex(month, ctx);
   if (id === 'cursor') return cursor(month, ctx);
   if (id === 'claude') return claude(month, ctx);

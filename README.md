@@ -45,3 +45,12 @@ For repeatable isolated layout checks, combine a task-owned TOKENLIGHT_PROFILE w
 This repository restores the verified Tokenlight 0.2.0 source. The bundled Codex helper is stored with Git LFS. Install Git LFS and run `git lfs pull` after cloning before building. Use the pinned dependencies and build commands above. Personal credentials, app data, generated builds and the local Beads database are excluded from Git.
 
 Mac App Store feasibility is tracked locally in Beads as `tokenlight-fua`. All six integrations are required; the investigation must establish provider-approved access and Apple App Sandbox compatibility before proposing release changes.
+
+
+## Ollama Cloud
+
+Ollama Cloud is the seventh source. Set OLLAMA_CLOUD_API_KEY (or OLLAMA_API_KEY) in your secrets file, or save a key in Connections. It reads only the official usage and balance APIs. Calendar-month token totals combine available daily buckets with previously retained days; incomplete coverage is labeled. Included credits follow the provider billing period and purchased credits are separate. Legacy plans may provide request counts and session/weekly limits without token totals.
+
+## Cursor allowance pools
+
+Cursor cards show Grok / Composer and Third-party models as independent billing-cycle allowances when the dashboard reports them. Percentages come directly from `autoPercentUsed` and `apiPercentUsed`, without combining them or inferring limits from model names. The calendar-month token total remains separate. Older summaries exposing only `totalPercentUsed` retain the generic billing-cycle indicator; missing pool values are never inferred as zero. This personal dashboard interface is subject to change.
