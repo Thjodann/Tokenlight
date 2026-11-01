@@ -70,3 +70,17 @@ test('network failure keeps the last valid total with a stale state', async () =
   assert.equal(service.snapshot().cards[0].monthly, 123);
   assert.equal(service.snapshot().cards[0].status, 'stale');
 });
+
+test('layout preference persists without changing the reporting month or targets', async () => {
+  const service = createService({}); const writes = [];
+  service.settings.targets = { openai: 12345 }; service.emit = () => {};
+  service.persist = async (file, value) => writes.push([file, value.layoutMode]);
+  await service.setLayoutMode('mini');
+  assert.equal(service.snapshot().settings.layoutMode, 'mini');
+  assert.equal(service.snapshot().month, '2026-10');
+  assert.equal(service.settings.targets.openai, 12345);
+  assert.deepEqual(writes, [['settings.json', 'mini']]);
+  await assert.rejects(service.setLayoutMode('bad'));
+  assert.equal(service.settings.layoutMode, 'mini'); assert.equal(writes.length, 1);
+  await service.setLayoutMode('dashboard'); assert.equal(service.snapshot().settings.layoutMode, 'dashboard');
+});

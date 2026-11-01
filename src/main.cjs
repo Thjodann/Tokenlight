@@ -4,12 +4,13 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const { spawn } = require('node:child_process');
 const { MODES, normalizeColorMode, backgroundColor, applyColorMode } = require('./appearance.cjs');
+const { LAYOUTS, MINIMUM, normalizeLayout, initialSize, LayoutController } = require('./layout.cjs');
 const { cacheAllowed, reconcileCredentials } = require('./credential-cache.cjs');
 
 if (process.env.TOKENLIGHT_PROFILE && path.isAbsolute(process.env.TOKENLIGHT_PROFILE)) app.setPath('userData', process.env.TOKENLIGHT_PROFILE);
 const single = app.requestSingleInstanceLock();
 if (!single) app.quit();
-let window, model, providers, fixture, service;
+let window, model, providers, fixture, service, layoutController;
 const ownChildren = new Set();
 app.on('second-instance', () => { if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } });
 app.on('before-quit', () => { for (const child of ownChildren) child.kill('SIGTERM'); });
@@ -23,6 +24,7 @@ class Service {
     let defaultPath = null; try { await fs.access(candidate); defaultPath = candidate; } catch {}
     this.settings = { secretsPath: defaultPath, targets: {}, refreshMinutes: 5, keychainAllowed: {}, colorMode: 'auto', ...await this.read('settings.json', {}) };
     this.settings.colorMode = normalizeColorMode(this.settings.colorMode);
+    this.settings.layoutMode = normalizeLayout(this.settings.layoutMode);
     this.cache = await this.read('usage-cache.json', {});
     const encrypted = await this.read('credentials.json', null);
     if (encrypted) {
@@ -44,7 +46,16 @@ class Service {
     });
     return { month: this.month, demo: this.demo, cards, version: app.getVersion(), updatedAt: Date.now(), fileError: this.fileError, vaultError: this.vaultError,
       appearance: { dark: nativeTheme.shouldUseDarkColors },
-      settings: { secretsPath: this.settings.secretsPath, refreshMinutes: this.settings.refreshMinutes, colorMode: this.settings.colorMode, targets: this.settings.targets, savedKeys: Object.keys(this.vault) } };
+      settings: { secretsPath: this.settings.secretsPath, refreshMinutes: this.settings.refreshMinutes, colorMode: this.settings.colorMode, layoutMode: this.settings.layoutMode, targets: this.settings.targets, savedKeys: Object.keys(this.vault) } };
+  }
+  async setLayoutMode(mode) {
+    if (!LAYOUTS.includes(mode)) throw new Error('Choose Dashboard or Mini.');
+    this.settings.layoutMode = mode;
+    await this.persist('settings.json', this.settings);
+    layoutController?.apply(mode);
+    const item = Menu.getApplicationMenu?.()?.getMenuItemById('mini-layout');
+    if (item) item.checked = mode === 'mini';
+    this.emit(); return this.snapshot();
   }
   async setColorMode(mode) {
     if (!MODES.includes(mode)) throw new Error('Choose Auto, Dark, or Light.');
@@ -114,10 +125,10 @@ app.whenReady().then(async () => {
   [model, providers, fixture] = await Promise.all([import('./model.mjs'), import('./providers.mjs'), import('./fixtures.mjs')]);
   service = new Service(); await service.init();
   applyColorMode(service.settings.colorMode, nativeTheme);
-  const requestedSize = /^(\d{3,4})x(\d{3,4})$/.exec(process.env.TOKENLIGHT_WINDOW_SIZE || '');
-  const validSize = requestedSize && requestedSize.slice(1).every(value => Number(value) >= 320 && Number(value) <= 4096);
-  window = new BrowserWindow({ title: 'Tokenlight', width: validSize ? Number(requestedSize[1]) : 1320, height: validSize ? Number(requestedSize[2]) : 900, minWidth: 320, minHeight: 320, show: false, backgroundColor: backgroundColor(nativeTheme.shouldUseDarkColors), titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 10 },
+  const [width, height] = initialSize(process.env.TOKENLIGHT_WINDOW_SIZE, service.settings.layoutMode);
+  window = new BrowserWindow({ title: 'Tokenlight', width, height, minWidth: MINIMUM.width, minHeight: MINIMUM.height, show: false, backgroundColor: backgroundColor(nativeTheme.shouldUseDarkColors), titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 10 },
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false, backgroundThrottling: false } });
+  layoutController = new LayoutController(window, service.settings.layoutMode);
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.session.setPermissionRequestHandler((_wc, _permission, cb) => cb(false));
@@ -128,6 +139,7 @@ app.whenReady().then(async () => {
   });
   handle('get-snapshot', () => service.snapshot());
   handle('set-appearance', mode => service.setColorMode(mode));
+  handle('set-layout', mode => service.setLayoutMode(mode));
   nativeTheme.on('updated', () => { window.setBackgroundColor(backgroundColor(nativeTheme.shouldUseDarkColors)); service.emit(); });
   handle('refresh', id => service.refresh(id, true));
   handle('set-month', async month => { model.monthRange(month); if (month > model.currentMonth() || month < '2020-01') throw new providers.ProviderError(`Choose a month from January 2020 through ${new Date(model.currentMonth() + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}.`, 'validation'); service.month = month; service.followCurrent = month === model.currentMonth(); service.emit(); service.refresh(); return service.snapshot(); });
@@ -160,7 +172,7 @@ app.whenReady().then(async () => {
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: 'Tokenlight', submenu: [{ role: 'about' }, { type: 'separator' }, { label: 'Connections…', accelerator: 'CmdOrCtrl+,', click: () => window.webContents.send('show-connections') }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },
-    { role: 'editMenu' }, { label: 'View', submenu: [{ label: 'Refresh usage', accelerator: 'CmdOrCtrl+R', click: () => service.refresh(null, true) }, { label: 'Appearance', submenu: MODES.map(mode => ({ id: `appearance-${mode}`, label: mode === 'auto' ? 'Auto — follow system' : mode === 'dark' ? 'Dark' : 'Light', type: 'radio', checked: service.settings.colorMode === mode, click: () => service.setColorMode(mode) })) }, { role: 'togglefullscreen' }] }, { role: 'windowMenu' }
+    { role: 'editMenu' }, { label: 'View', submenu: [{ label: 'Refresh usage', accelerator: 'CmdOrCtrl+R', click: () => service.refresh(null, true) }, { id: 'mini-layout', label: 'Mini dashboard', accelerator: 'CmdOrCtrl+Shift+M', type: 'checkbox', checked: service.settings.layoutMode === 'mini', click: item => service.setLayoutMode(item.checked ? 'mini' : 'dashboard') }, { label: 'Appearance', submenu: MODES.map(mode => ({ id: `appearance-${mode}`, label: mode === 'auto' ? 'Auto — follow system' : mode === 'dark' ? 'Dark' : 'Light', type: 'radio', checked: service.settings.colorMode === mode, click: () => service.setColorMode(mode) })) }, { role: 'togglefullscreen' }] }, { role: 'windowMenu' }
   ]));
   await window.loadFile(path.join(__dirname, 'index.html'));
   window.show(); service.refresh();

@@ -16,7 +16,9 @@
       <button class="nav-item" data-view="account">Accounts</button>
       <button class="nav-item" data-view="api">API usage</button>
     </nav>
+    <span id="mini-month" class="mini-month" title="Reporting month · UTC"></span>
     <div class="toolbar-actions">
+      <button id="layout-toggle" class="button layout-toggle" aria-label="Use mini dashboard" aria-pressed="false">Mini</button>
       <label class="appearance-control"><span>Appearance</span><select id="appearance-mode" aria-label="Color mode"><option value="auto">Auto</option><option value="dark">Dark</option><option value="light">Light</option></select></label>
       <button id="refresh-button" class="button icon-action" aria-label="Refresh usage" title="Refresh usage"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 7a7 7 0 0 1 11.6-2L20 8M4 16l2.3 3A7 7 0 0 0 18 17"/></svg></button>
       <button id="connections-button" class="button" aria-label="Connections" title="Connections"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v5m8-5v5M6 8h12v3a6 6 0 0 1-6 6v4m0-4a6 6 0 0 1-6-6V8"/></svg><span class="connection-button-label">Connections</span></button>
@@ -34,7 +36,7 @@
       <div class="demo-option"><div><strong>Take a look with sample data</strong><p>Explore the dashboard without connecting an account.</p></div><button class="button button-quiet" id="demo-button">Preview</button></div>
     </div>
   </dialog>
-  <dialog id="details-dialog" aria-labelledby="details-title"><div class="dialog-header"><div><span class="eyebrow" id="details-provider"></span><h2 id="details-title"></h2></div><button class="icon-button" data-close="details-dialog" aria-label="Close source details">✕</button></div><div class="dialog-content" id="details-content"></div></dialog>
+  <dialog id="details-dialog" aria-labelledby="details-title"><div class="dialog-header"><div class="detail-heading"><span id="details-logo" class="source-icon" aria-hidden="true"></span><div><span class="eyebrow" id="details-provider"></span><h2 id="details-title"></h2></div></div><button class="icon-button" data-close="details-dialog" aria-label="Close source details">✕</button></div><div class="dialog-content" id="details-content"></div></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <script type="module" src="renderer.mjs"></script>
 </body>

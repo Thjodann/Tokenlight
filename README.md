@@ -1,6 +1,6 @@
 # Tokenlight
 
-A personal macOS app for viewing OpenAI/Codex, Anthropic/Claude Code, Cursor and ElevenLabs usage. Source and scaffold are retained until human acceptance.
+A personal macOS app for viewing OpenAI/Codex, Anthropic/Claude Code, Cursor, ElevenLabs and Ollama Cloud usage. Source and scaffold are retained until human acceptance.
 
 ## Rebuild
 
@@ -35,7 +35,7 @@ Initial and final QA passes, human testing, independent review, TLC and acceptan
 
 ## Appearance and compact layouts
 
-Choose Auto, Dark, or Light from the toolbar or View → Appearance. Auto follows macOS appearance without changing the system setting. The choice persists across launches. The layout supports narrow portrait and short landscape windows, with independent scrolling inside source-detail sheets. The minimum window size is 320×320; this is still a macOS app, not an iOS or Android build.
+Choose Auto, Dark, or Light from the toolbar or View → Appearance. Auto follows macOS appearance without changing the system setting. The choice persists across launches. The layout supports narrow portrait and short landscape windows, with independent scrolling inside source-detail sheets. The minimum window size is 260×180; this is still a macOS app, not an iOS or Android build.
 
 For repeatable isolated layout checks, combine a task-owned TOKENLIGHT_PROFILE with TOKENLIGHT_DEMO=1 and TOKENLIGHT_WINDOW_SIZE=390x740 or 740x390. No layout override changes the default user profile.
 
@@ -64,3 +64,11 @@ Claude Code shows session, overall weekly, and Fable weekly allowances, plus Fab
 Paid Claude usage and its monthly cap use the provider's explicit currency precision. A prepaid balance is shown only when the connection reports it; an absent balance is labeled unreported. These figures cover the current account period even when a historical activity month is selected. Claude subscription credits and Claude API billing are separate.
 
 The Anthropic API card reads model costs through the Analytics cost endpoint and distinguishes Fable from other models in details. API costs are after discounts and before credits, not net card charges. If cost access fails, token reporting continues with an explicit cost warning. OpenAI API, Anthropic API and Cursor connections do not currently expose prepaid balances through these adapters; no balance is inferred from a spending cap or token count.
+
+## Provider identity and Mini dashboard (0.4.0)
+
+OpenAI/Codex share teal, Anthropic/Claude share terracotta, Cursor is violet, ElevenLabs blue and Ollama gold. Original provider marks are bundled for offline use; see [mark provenance](docs/provider-marks.md). The colors continue through cards, connections, detail sheets and mini rows in both appearances.
+
+Click **Mini** or choose **View → Mini dashboard** (⌘⇧M) for a small, persistent monitor. **Full** restores the dashboard size. The app automatically uses mini rows below 360 pixels wide, at heights of 320 pixels or less, or in windows no larger than 440×440. Narrow portrait windows such as 390×740 retain full cards. Mini always lists all seven sources, regardless of the full dashboard filter. At 320×240 it is designed as a compact monitor; at the 260×180 minimum, rows and detail sheets scroll.
+
+Mini's left metric is selected-month activity when reported, otherwise a current allowance percentage. `~` marks incomplete history. Its right metric is the first reported credit balance or allowance value, or explicitly labeled API cost. Hover or open a row for its meaning; other balances, reset passes, Cursor pools and Fable detail remain in the source sheet. A dash means unreported, not zero. Current allowances and balances remain current when viewing a historical month. Refresh, connections and color mode remain accessible in mini.

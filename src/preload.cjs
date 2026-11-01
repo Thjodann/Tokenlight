@@ -3,6 +3,7 @@ async function invoke(channel, ...args) { const result = await ipcRenderer.invok
 contextBridge.exposeInMainWorld('tokenlight', {
   snapshot: () => invoke('get-snapshot'), refresh: id => invoke('refresh', id), month: value => invoke('set-month', value),
   appearance: mode => invoke('set-appearance', mode),
+  layout: mode => invoke('set-layout', mode),
   saveKey: (id, key) => invoke('save-key', id, key), target: (id, value) => invoke('set-target', id, value),
   chooseSecrets: () => invoke('choose-secrets'), openProvider: (id, purpose) => invoke('open-provider', id, purpose),
   connect: id => invoke('connect', id), signInClaude: () => invoke('sign-in-claude'), demo: enabled => invoke('demo', enabled), export: () => invoke('export'),
