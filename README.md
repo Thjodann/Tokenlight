@@ -44,7 +44,7 @@ For repeatable isolated layout checks, combine a task-owned TOKENLIGHT_PROFILE w
 
 This repository restores the verified Tokenlight 0.2.0 source. The bundled Codex helper is stored with Git LFS. Install Git LFS and run `git lfs pull` after cloning before building. Use the pinned dependencies and build commands above. Personal credentials, app data, generated builds and the local Beads database are excluded from Git.
 
-Mac App Store feasibility is tracked locally in Beads as `tokenlight-fua`. All six integrations are required; the investigation must establish provider-approved access and Apple App Sandbox compatibility before proposing release changes.
+Mac App Store feasibility is tracked locally in Beads as `tokenlight-fua`. All seven integrations are required; the investigation must establish provider-approved access and Apple App Sandbox compatibility before proposing release changes.
 
 
 ## Ollama Cloud
@@ -54,3 +54,13 @@ Ollama Cloud is the seventh source. Set OLLAMA_CLOUD_API_KEY (or OLLAMA_API_KEY)
 ## Cursor allowance pools
 
 Cursor cards show Grok / Composer and Third-party models as independent billing-cycle allowances when the dashboard reports them. Percentages come directly from `autoPercentUsed` and `apiPercentUsed`, without combining them or inferring limits from model names. The calendar-month token total remains separate. Older summaries exposing only `totalPercentUsed` retain the generic billing-cycle indicator; missing pool values are never inferred as zero. This personal dashboard interface is subject to change.
+
+## Credits and Fable (0.3.1)
+
+Balances are independent of token totals and allowance percentages. Codex shows its reported current credit balance and available allowance-reset passes; Tokenlight never redeems a reset. ElevenLabs shows credits remaining in the current subscription cycle. Ollama shows included and purchased credit balances separately.
+
+Claude Code shows session, overall weekly, and Fable weekly allowances, plus Fable allowance value remaining. The current personal feed uses a private codename for the dollar-denominated Fable meter; Jared confirmed its provider UI label on October 31, 2026. This mapping requires the full dollar-allowance shape and may change with the provider interface. Fable allowance value is not billed cost and overlaps the overall usage limits.
+
+Paid Claude usage and its monthly cap use the provider's explicit currency precision. A prepaid balance is shown only when the connection reports it; an absent balance is labeled unreported. These figures cover the current account period even when a historical activity month is selected. Claude subscription credits and Claude API billing are separate.
+
+The Anthropic API card reads model costs through the Analytics cost endpoint and distinguishes Fable from other models in details. API costs are after discounts and before credits, not net card charges. If cost access fails, token reporting continues with an explicit cost warning. OpenAI API, Anthropic API and Cursor connections do not currently expose prepaid balances through these adapters; no balance is inferred from a spending cap or token count.

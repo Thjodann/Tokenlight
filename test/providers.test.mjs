@@ -42,8 +42,8 @@ test('truncated pagination never publishes an apparently complete total', async 
 });
 test('Anthropic uses its current analytics schema and token categories', async () => {
   const original = globalThis.fetch; let captured;
-  globalThis.fetch = async url => { captured = new URL(url); return response({ data: [{ starting_at: '2026-10-02T00:00:00Z', usage: { uncached_input_tokens: 1, output_tokens: 2, cache_read_input_tokens: 3, cache_creation: { ephemeral_5m_input_tokens: 4, ephemeral_1h_input_tokens: 5 } } }], has_more: false, data_refreshed_at: '2026-10-31T12:00:00Z' }); };
-  try { const value = await readProvider('anthropic', '2026-10', { credentials: { anthropic: 'test-credential' } }); assert.equal(value.monthly, 15); assert.equal(captured.searchParams.get('time_bucket_width'), '1d'); assert.equal(captured.searchParams.get('bucket_width'), null); assert.equal(value.asOf, '2026-10-31T12:00:00Z'); }
+  globalThis.fetch = async url => { if (new URL(url).pathname.endsWith('/cost')) return new Response('', { status: 403 }); captured = new URL(url); return response({ data: [{ starting_at: '2026-10-02T00:00:00Z', usage: { uncached_input_tokens: 1, output_tokens: 2, cache_read_input_tokens: 3, cache_creation: { ephemeral_5m_input_tokens: 4, ephemeral_1h_input_tokens: 5 } } }], has_more: false, data_refreshed_at: '2026-10-31T12:00:00Z' }); };
+  try { const value = await readProvider('anthropic', '2026-10', { credentials: { anthropic: 'test-credential' } }); assert.equal(value.monthly, 15); assert.equal(captured.searchParams.get('time_bucket_width'), '1d'); assert.equal(captured.searchParams.get('bucket_width'), null); assert.equal(value.asOf, '2026-10-31T12:00:00Z'); assert.equal(value.apiCost, null); assert.match(value.costNote, /no cost is inferred/); }
   finally { globalThis.fetch = original; }
 });
 test('unauthorized usage requests give a setup action without logging server text', async () => {

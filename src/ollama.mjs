@@ -20,10 +20,11 @@ export function normalizeOllama(usage, balance, month, previous = {}) {
   const daily = dailySeries(month, [...days.values()]);
   const historyFrom = Math.min(from, Number.isFinite(previous.historyFrom) ? previous.historyFrom : from);
   const windows = [], included = balance.included, purchased = balance.purchased;
-  const parts = [];
+  const parts = [], creditBalances = [];
   if (included.balance_usd != null || included.allowance_usd != null) {
     if (!finite(included.balance_usd) || !finite(included.allowance_usd) || !Number.isFinite(Date.parse(included.period?.until))) throw new Error('Invalid balance');
     parts.push(`${money(included.balance_usd)} included remaining`);
+    creditBalances.push({ label: 'Included credits remaining', value: included.balance_usd, unit: 'USD', allowance: true, resetsAt: Date.parse(included.period.until) });
     if (included.allowance_usd > 0) windows.push({ label: 'Included credits', percent: Math.max(0, (1 - included.balance_usd / included.allowance_usd) * 100), used: Math.max(0, included.allowance_usd - included.balance_usd), limit: included.allowance_usd, unit: 'USD', resetsAt: Date.parse(included.period.until) });
   }
   for (const [id, label] of [['session', 'Session'], ['weekly', 'Weekly']]) {
@@ -33,9 +34,10 @@ export function normalizeOllama(usage, balance, month, previous = {}) {
   }
   if (!finite(purchased.balance_usd)) throw new Error('Invalid purchased credits');
   parts.push(`${money(purchased.balance_usd)} purchased`);
+  creditBalances.push({ label: 'Purchased credit balance', value: purchased.balance_usd, unit: 'USD' });
   const partial = missingTokens || historyFrom > start || until < Math.min(end, new Date().setUTCHours(0, 0, 0, 0));
   return { monthly: daily.length ? daily.reduce((sum, r) => sum + r.value, 0) : null, daily, unit: 'tokens', windows, historyFrom, partial,
-    balanceSummary: parts.join(' · '),
+    balanceSummary: parts.join(' · '), creditBalances,
     coverage: 'Cloud usage · selected calendar month · UTC. Included credits follow the provider billing period.',
     historyNote: missingTokens ? 'Legacy activity may report requests without token counts. No missing tokens are inferred.' : partial ? 'Only the available 30-day API history and previously retained days are included; this month may be incomplete.' : 'Selected-month totals use daily cloud usage buckets. New usage may be delayed.',
     connectionNote: `Usage history: ${usage.from} to ${usage.until}. Balance and allowance windows are current, regardless of the selected month.`,

@@ -1,3 +1,4 @@
+import { codexCredits, claudeCredits } from './account-credits.mjs';
 export const SOURCES = [
   { id: 'codex', title: 'Codex', organization: 'OpenAI', kind: 'account', color: '#317860', initials: 'Cx', dashboard: 'https://chatgpt.com/codex/settings/usage', description: 'Your Codex account activity and current allowance.' },
   { id: 'claude', title: 'Claude Code', organization: 'Anthropic', kind: 'account', color: '#bc7052', initials: 'Cl', dashboard: 'https://claude.ai/settings/usage', description: 'Your Claude account allowance and local Code activity.' },
@@ -77,15 +78,18 @@ export function normalizeCodex(limits, usage, month) {
   const hasHistory = Array.isArray(buckets) && (!buckets.length || buckets.some(b => b.startDate.slice(0, 7) === month));
   const daily = dailySeries(month, (usage?.dailyUsageBuckets ?? []).map(b => ({ date: b.startDate, value: b.tokens })));
   return { windows, daily, monthly: hasHistory ? daily.reduce((a, b) => a + b.value, 0) : null, unit: 'tokens', plan: root?.planType ?? null,
+    ...codexCredits(limits, root),
     coverage: hasHistory ? 'Provider-reported Codex activity · UTC' : 'Selected month is outside the returned activity history.', historyAvailable: hasHistory, partial: !!firstDate && month === firstDate.slice(0, 7) && !firstDate.endsWith('-01') };
 }
 export function normalizeClaude(usage) {
+  const credits = claudeCredits(usage);
   const windows = [];
   for (const [key, label] of [['five_hour', '5 hour'], ['seven_day', '7 day'], ['seven_day_opus', 'Opus · 7 day'], ['seven_day_sonnet', 'Sonnet · 7 day']]) {
     const w = usage?.[key];
     if (w && finite(w.utilization)) windows.push({ label, percent: w.utilization, resetsAt: Number.isFinite(Date.parse(w.resets_at)) ? Date.parse(w.resets_at) : null });
   }
-  return { windows, daily: [], monthly: null, unit: 'tokens', coverage: 'Account allowance · rolling windows', partial: false };
+  if (credits.fableWindow) windows.push(credits.fableWindow);
+  return { ...credits, windows, daily: [], monthly: null, unit: 'tokens', coverage: 'Account allowance · rolling windows', partial: false };
 }
 export function normalizeCursor(summary, events, month) {
   const aggregate = aggregateCursor(events), p = summary.individualUsage?.plan;
@@ -112,6 +116,7 @@ export function normalizeEleven(subscription, daily, month) {
     used: subscription.character_count, limit: subscription.character_limit, unit: 'credits', resetsAt: finite(subscription.next_character_count_reset_unix) ? subscription.next_character_count_reset_unix * 1000 : null });
   const series = daily == null ? [] : dailySeries(month, daily);
   return { windows, daily: series, monthly: daily == null ? null : series.reduce((a, b) => a + b.value, 0), unit: 'credits', plan: subscription.tier,
+    creditBalances: windows.length ? [{ label: 'Subscription credits remaining', value: Math.max(0, subscription.character_limit - subscription.character_count), unit: 'credits', allowance: true, resetsAt: windows[0].resetsAt }] : [],
     coverage: daily == null ? 'Current subscription cycle · monthly history unavailable' : 'Provider-reported credit usage · UTC', partial: daily == null };
 }
 export function formatCount(n) {

@@ -1,4 +1,5 @@
 import { normalizeOllama } from './ollama.mjs';
+import { anthropicCosts } from './anthropic-cost.mjs';
 import { spawn, execFile } from 'node:child_process';
 import { promisify, parseEnv } from 'node:util';
 import { readFile, readdir, stat, access } from 'node:fs/promises';
@@ -168,7 +169,7 @@ async function claude(month, ctx) {
   if (record.expiresAt && record.expiresAt <= Date.now()) throw new ProviderError('Your Claude Code session has expired. Open Claude Code to sign in again.', 'setup');
   const usage = await fetchJSON('https://api.anthropic.com/api/oauth/usage', { Authorization: `Bearer ${record.accessToken}`, 'anthropic-beta': 'oauth-2025-04-20' });
   const result = normalizeClaude(usage), local = await claudeLocal(month);
-  if (!result.windows.length) throw new ProviderError('Claude returned no allowance measurement. Check your plan in its usage dashboard.', 'coverage');
+  if (!result.windows.length && !result.creditBalances.length && !result.paidUsage) throw new ProviderError('Claude returned no allowance or credit measurement. Check your plan in its usage dashboard.', 'coverage');
   return { ...result, ...local, partial: true, plan: record.subscriptionType ?? 'Max', scope: identity(record.accessToken), sourceLabel: 'Claude Code account connection', coverage: 'Tokens from local Code logs only · UTC. Allowances are account-wide.', connectionNote: 'The personal account interface may change. Local token history excludes other devices and remote sessions.' };
 }
 async function apiUsage(id, month, ctx) {
@@ -204,7 +205,13 @@ async function apiUsage(id, month, ctx) {
     }
   }
   const series = dailySeries(month, daily), total = series.reduce((a, b) => a + b.value, 0);
+  let apiCost = null, costNote = null;
+  if (id === 'anthropic') {
+    try { apiCost = await anthropicCosts(month, fetchJSON, { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'analytics-usage-cost-2026-08-24' }); }
+    catch { costNote = 'Model spending could not be read. Token usage is still available; no cost is inferred.'; }
+  }
   return { daily: series, monthly: id === 'anthropic' && !asOf && !series.length ? null : total, unit: 'tokens', breakdown, windows: [], scope: identity(key), sourceLabel: 'Organization usage API', asOf,
+    apiCost, costNote, creditNote: 'This reporting connection does not expose a prepaid credit balance.' + (id === 'anthropic' ? ' API costs are after discounts and before credits; they are separate from Claude subscription credit spending.' : ''),
     partial: id === 'anthropic' && !asOf, coverage: id === 'openai' ? 'Completions & embeddings · organization · UTC' : 'Organization token usage · UTC. Provider reporting may be delayed.' };
 }
 async function elevenlabs(month, ctx) {
