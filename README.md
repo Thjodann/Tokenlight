@@ -69,7 +69,7 @@ The Anthropic API card reads model costs through the Analytics cost endpoint and
 
 OpenAI/Codex share teal, Anthropic/Claude share terracotta, Cursor is violet, ElevenLabs blue and Ollama gold. Original provider marks are bundled for offline use; see [mark provenance](docs/provider-marks.md). The colors continue through cards, connections, detail sheets and mini rows in both appearances.
 
-Click **Mini** or choose **View → Mini dashboard** (⌘⇧M) for a small, persistent monitor. **Full** restores the dashboard size. The app automatically uses mini rows below 360 pixels wide, at heights of 320 pixels or less, or in windows no larger than 440×440. Narrow portrait windows such as 390×740 retain full cards. Mini always lists all seven sources, regardless of the full dashboard filter. At 320×240 it is designed as a compact monitor; at the 260×180 minimum, rows and detail sheets scroll.
+Resize the window to choose the layout automatically. The source dashboard packs all seven readings into tiles or compact rows. Below 360 pixels wide, at short heights, or in small windows, Mini uses a compact list with the same Overview, Accounts, API usage and Insights filters. The manual Mini/Full button is removed. View → Mini dashboard (⌘⇧M) remains an optional window-size preset. At the 260×180 minimum all seven rows fit; source detail sheets can scroll.
 
 Mini's left metric is selected-month activity when reported, otherwise a current allowance percentage. `~` marks incomplete history. Its right metric is the first reported credit balance or allowance value, or explicitly labeled API cost. Hover or open a row for its meaning; other balances, reset passes, Cursor pools and Fable detail remain in the source sheet. A dash means unreported, not zero. Current allowances and balances remain current when viewing a historical month. Refresh, connections and color mode remain accessible in mini.
 
@@ -77,4 +77,7 @@ Mini's left metric is selected-month activity when reported, otherwise a current
 
 The **Insights** tab shows known monthly costs separately from reported or estimated usage value, plus recorded activity rankings, the most-used model and optional account age. In a source sheet, enter a monthly plan fee, a one-month metered-cost override or the actual account start date. These records stay local and never change billing. Unknown sources remain visibly excluded; provider costs are before account credits and tax.
 
-Wide, short windows (at least 1000 px wide with an aspect ratio of at least 2.4) automatically use a horizontal instrument layout. Explicit Mini remains available, and Full restores a useful previous wide size. Inspect [spending definitions and pricing provenance](docs/spending-and-insights.md) for scope, exclusions, supported estimates and known data limits.
+Panoramic windows use a horizontal instrument rail when there is room. Other window shapes use an adaptive grid or compact rows before any source is clipped. Extra summary metrics appear only when space allows; the full breakdown remains in Insights. Inspect [spending definitions and pricing provenance](docs/spending-and-insights.md) for scope, exclusions, estimates and known data limits.
+
+0.5.1 makes the source dashboard fit the available width and height with adaptive tiles/rows; Mini keeps all seven rows in view.
+Snapshot export stays available in the toolbar at every size.

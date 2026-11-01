@@ -1,5 +1,5 @@
 import { insightsPage, financeDetails, cardCosts } from './insight-view.mjs';
-import { wideView, WIDE_QUERY } from './wide-view.mjs';
+import { wideView, WIDE_QUERY, instrumentLayout } from './wide-view.mjs';
 import { providerFor, providerLogo } from './provider-branding.mjs';
 import { miniView, MINI_QUERY } from './mini-view.mjs';
 import { creditSection } from './credit-view.mjs';
@@ -58,16 +58,22 @@ function card(c) {
   const label = monthly ? `${c.partial && c.id === 'claude' ? 'On this Mac' : snapshot.month === currentMonth() ? 'Month to date' : 'Monthly activity'} <strong>· ${esc(c.unit)}</strong>` : w ? `${esc(w.label)} allowance` : 'Monthly usage not reported';
   return `<article class="source-card source--${c.id} ${loading ? 'is-loading' : ''}" data-provider="${providerFor(c.id)}" aria-label="${c.title}">${header}<div class="metric-row"><div><div class="metric-value" title="${esc(fullCount(c.monthly))}">${number}${!monthly && unit ? `<small>${unit}</small>` : ''}</div><p class="metric-label">${label}</p></div>${pools.length ? '' : gauge(windowPercent, w?.label || 'Monthly target')}</div>${creditSection(c)}${cardCosts(c, snapshot)}${!c.creditBalances?.length && c.balanceSummary ? `<p class="balance-summary">${esc(c.balanceSummary)}</p>` : ""}${chart(c)}<div class="trend-label"><span>01 ${new Date(snapshot.month + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }).toUpperCase()}</span><span>${monthly ? 'DAILY ACTIVITY · UTC' : w ? 'REPORTED ALLOWANCE' : 'AWAITING MONTHLY REPORT'}</span></div>${pools.length ? allowancePools(pools) : w ? `<div class="window-row"><strong>${Math.round(w.percent)}% used</strong><span>· ${esc(w.label)}</span><span class="reset-label">${Number.isFinite(w.resetsAt) ? 'Resets ' + reset(w.resetsAt) : 'Reset not reported'}</span></div>` : c.monthlyTarget ? `<div class="window-row"><strong>${formatCount(c.monthlyTarget)} ${esc(c.unit)}</strong><span>monthly target</span></div>` : '<div class="window-row"><span>No monthly target set</span></div>'}<div class="card-footer"><span class="status-text"><i class="status-dot ${stale ? 'stale' : ''}"></i>${stale ? 'Last reading · offline or delayed' : loading ? 'Refreshing' : since(c.lastUpdatedAt)}</span>${c.partial ? '<span class="source-note">Partial history</span>' : `<span>${snapshot.demo ? 'Sample data' : 'Source connected'}</span>`}</div></article>`;
 }
+function fitInstruments() {
+  const rack = document.querySelector('.instrument-rack');
+  if (!rack || !rack.clientWidth || !rack.clientHeight) return;
+  const fit = instrumentLayout(rack.clientWidth, rack.clientHeight, rack.children.length, wideQuery.matches);
+  if (!fit) return;
+  rack.style.setProperty('--instrument-columns', fit.columns);
+  rack.style.setProperty('--instrument-rows', fit.rows);
+  rack.dataset.density = fit.density;
+}
 function render() {
   if (!snapshot) return;
-  const currentWide = snapshot.settings.layoutMode !== 'mini' && wideQuery.matches;
-  currentMini = snapshot.settings.layoutMode === 'mini' || (compactQuery.matches && !currentWide);
+  currentMini = compactQuery.matches && !wideQuery.matches;
+  const currentWide = !currentMini;
   document.body.dataset.wide = String(currentWide);
   document.body.dataset.mini = String(currentMini);
   $('#mini-month').textContent = new Date(snapshot.month + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' });
-  $('#layout-toggle').textContent = currentMini ? 'Full' : 'Mini';
-  $('#layout-toggle').setAttribute('aria-label', currentMini ? 'Expand full dashboard' : 'Use mini dashboard');
-  $('#layout-toggle').setAttribute('aria-pressed', String(currentMini));
   const active = document.activeElement, focusId = active?.id, focusAction = active?.dataset?.action, focusSource = active?.dataset?.id, wasMain = $('#main').contains(active);
   const selectedCards = snapshot.cards.filter(c => view === 'overview' || c.kind === view), connected = snapshot.cards.filter(hasReading).length;
   const needs = snapshot.cards.filter(c => ['setup', 'stale', 'unconnected'].includes(c.status)).length;
@@ -81,7 +87,8 @@ function render() {
   $('#breadcrumb').textContent = names[view][0];
   const sections = view === 'insights' ? insightsPage(snapshot) : ['account', 'api'].filter(k => view === 'overview' || k === view).map(kind => `<section aria-label="${kind === 'account' ? 'AI accounts' : 'API usage'}"><div class="section-heading"><div class="section-label"><h2>${kind === 'account' ? 'AI accounts' : 'API usage'}</h2><span>${snapshot.cards.filter(c => c.kind === kind).length}</span></div><p>${kind === 'account' ? 'Account activity & current allowances' : 'Calendar month · UTC'}</p></div><div class="cards" data-kind="${kind}">${selectedCards.filter(c => c.kind === kind).map(card).join('')}</div></section>`).join('');
   const dashboard = `${snapshot.demo ? '<div class="demo-banner"><strong>Sample data</strong><span>These readings are examples. Live connections are paused.</span><button class="button" data-action="live">Use live data</button></div>' : ''}<div class="page-heading"><div><span class="eyebrow">MONTHLY ACTIVITY</span><h1>${names[view][1]}</h1><p class="page-description">${names[view][2]}</p></div><div class="period-picker" aria-label="Reporting month"><button class="icon-button" data-action="previous" aria-label="Previous month">‹</button><input type="month" id="month-control" value="${snapshot.month}" min="2020-01" max="${currentMonth()}" aria-label="Choose reporting month"><button class="icon-button" data-action="next" aria-label="Next month" ${snapshot.month === currentMonth() ? 'disabled' : ''}>›</button></div></div><div class="overview-stats"><div class="overview-stat"><span class="stat-symbol" aria-hidden="true">⌁</span><div><p class="stat-label">Connected sources</p><p class="stat-value">${connected}<span>of ${snapshot.cards.length} sources</span></p></div></div><div class="overview-stat"><span class="stat-symbol" aria-hidden="true">${needs ? '◌' : '✓'}</span><div><p class="stat-label">Needs attention</p><p class="stat-value">${busy && !connected ? 'Checking' : needs ? `${needs} source${needs === 1 ? '' : 's'}` : 'All connected'}</p></div></div><div class="overview-stat"><span class="stat-symbol" aria-hidden="true">◷</span><div><p class="stat-label">Next allowance reset</p><p class="stat-value">${next ? reset(next.resetsAt) : 'Not reported'}<span>${next ? new Date(next.resetsAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}</span></p></div></div></div>${snapshot.fileError ? `<div class="attention-banner"><span>${esc(snapshot.fileError)}</span><button data-action="connections">Choose file</button></div>` : ''}${sections}<footer class="page-footer"><p><span aria-hidden="true">◈</span>Data stays on your Mac. Each source keeps its own units and allowance window.</p><button data-action="export">Export snapshot ↗</button></footer>`;
-  $('#main').innerHTML = `<div class="dashboard-content">${dashboard}</div><div class="wide-content">${wideView(snapshot,view)}</div>${miniView(snapshot)}`;
+  $('#main').innerHTML = `<div class="dashboard-content">${dashboard}</div><div class="wide-content">${wideView(snapshot,view)}</div>${miniView(snapshot,view)}`;
+  fitInstruments();
   for (const button of document.querySelectorAll('[data-view]')) { button.classList.toggle('active', button.dataset.view === view); button.setAttribute('aria-current', button.dataset.view === view ? 'page' : 'false'); }
   for (const monthControl of document.querySelectorAll('input[type="month"]')) monthControl.addEventListener('change', async e => {
     const month = e.target.value;
@@ -150,9 +157,9 @@ async function action(name, id) {
   if (['previous', 'next'].includes(name)) { const d = new Date(snapshot.month + '-01T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + (name === 'previous' ? -1 : 1)); return run(() => api.month(d.toISOString().slice(0, 7))); }
 }
 document.addEventListener('click', e => { const close = e.target.closest('[data-close]'); if (close) return $('#' + close.dataset.close).close(); const button = e.target.closest('[data-action]'); if (button) action(button.dataset.action, button.dataset.id); const nav = e.target.closest('[data-view]'); if (nav) { view = nav.dataset.view; render(); } });
-$('#layout-toggle').addEventListener('click', () => run(() => api.layout(currentMini ? 'dashboard' : 'mini')));
 compactQuery.addEventListener('change', () => render());
 wideQuery.addEventListener('change', () => render());
+new ResizeObserver(fitInstruments).observe($('#main'));
 $('#connections-button').addEventListener('click', showConnections);
 $('#appearance-mode').addEventListener('change', () => run(() => api.appearance($('#appearance-mode').value)));
 $('#refresh-button').addEventListener('click', () => run(() => api.refresh()));

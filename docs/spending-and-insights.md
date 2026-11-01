@@ -33,6 +33,12 @@ Provider-reported Cursor event values and matched Anthropic model list-price cos
 
 ## Layouts and verification
 
-Wide mode is automatic at widths of at least 1000 pixels and aspect ratios of at least 2.4. It shows a horizontal instrument for each source and keeps a route to totals and details. Mini stays explicit and automatic for genuinely small windows, but a wide short viewport no longer falls into Mini solely because its height is below 320 pixels. Returning from Mini restores a usable previous wide size. Taller ultrawide windows add the cost/age instruments and model mileage below the source rack.
+The source dashboard adapts its grid and density to the available width and height. Panoramic windows retain a single instrument rail when it is readable; heights below 280 pixels use Mini. Summary metrics appear only when there is space. The full cost table and model mileage remain in Insights.
 
 The Insights tab includes provider costs, coverage, request counts, optional ages, and model mileage. Source sheets provide local fee/date controls and pricing links. Existing color modes and source colors apply. Normal portrait and Mini retain their respective layouts. Exports include the derived insight summary while continuing to omit authentication scopes and credentials.
+
+## Adaptive source view (0.5.1)
+
+Overview, Accounts and API usage choose a tile grid or compact rows from the actual space after the controls. Resizing changes density before sources spill outside the window; all source readings remain accessible without scrolling. Panoramic windows retain the single instrument rail. Extra summary metrics appear only when space allows, with the full breakdown in Insights. Mini divides its available height among all seven rows, including 260×180. At dense sizes the monthly reading and credit balance stay prominent; source sheets retain the full allowance windows, costs and history. Source sheets and the long Insights breakdown can still scroll.
+
+All four navigation filters remain available in Mini, including a five-metric compact Insights summary. The manual Mini button is removed; resizing chooses the layout automatically, including when old saved settings had selected Mini.

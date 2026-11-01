@@ -10,7 +10,7 @@ import { sourceCost,monthlyInsights,monthlyFee,accountAge,applyProfileChange,val
 import { openaiCosts } from '../src/openai-cost.mjs';
 import { claudeLocal } from '../src/providers.mjs';
 import { financeDetails,insightsPage } from '../src/insight-view.mjs';
-import { wideView } from '../src/wide-view.mjs';
+import { instrumentLayout, wideView } from '../src/wide-view.mjs';
 import { demoCards } from '../src/fixtures.mjs';
 import layout from '../src/layout.cjs';
 const month=currentMonth(), now=Date.now();
@@ -108,4 +108,11 @@ test('provider model list-price costs take precedence and a positive bill preven
  const c={modelUsage:[row],apiCost:{total:1,models:[{model:row.model,listAmount:4}]}};
  assert.equal(usageValue(c).total,4);assert.equal(usageValue(c).models[0].priceBasis,'Provider list-price report');
  assert.equal(usageValue({monthly:0,apiCost:{total:1}}).total,null);
+});
+
+test('instruments pack seven sources into short, desktop and portrait spaces',()=>{
+ for(const [w,h] of [[1296,425],[1296,700],[876,440],[366,550],[616,270],[976,110]]){
+  const fit=instrumentLayout(w,h,7);assert.ok(fit.columns*fit.rows>=7);assert.ok(fit.columns<=7);assert.ok((h-6*(fit.rows-1))/fit.rows>0);assert.ok((w-6*(fit.columns-1))/fit.columns>=84);
+ }
+ assert.equal(instrumentLayout(366,550,7).density,'rows');assert.equal(instrumentLayout(1296,425,7).rows,2);assert.equal(instrumentLayout(1296,190,7,true).columns,7);
 });

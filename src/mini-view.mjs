@@ -1,3 +1,4 @@
+import { insightsPage } from './insight-view.mjs';
 import { finite, formatCount } from './model.mjs';
 import { providerFor, providerLogo } from './provider-branding.mjs';
 import { creditAmount } from './credit-view.mjs';
@@ -14,9 +15,11 @@ export function miniCredit(card) {
   if (finite(card.apiCost?.total)) return { text: `${creditAmount(card.apiCost.total, card.apiCost.unit)} cost`, title: `${creditAmount(card.apiCost.total, card.apiCost.unit)} reported API cost for the selected month, before credits` };
   return { text: '—', title: 'Credit balance not reported' };
 }
-export function miniView(snapshot) {
+export function miniView(snapshot, view = 'overview') {
+  if (view === 'insights') return `<section class="mini-panel mini-insights" aria-label="Mini insights">${insightsPage(snapshot)}</section>`;
+  const cards = snapshot.cards.filter(c => view === 'overview' || c.kind === view);
   const month = new Date(snapshot.month + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
-  return `<section class="mini-panel" aria-label="Mini dashboard"><div class="mini-context"><span>${esc(month)} · UTC${snapshot.demo ? ' · SAMPLE DATA' : ''}</span><span>~ partial history</span></div><div class="mini-head" aria-hidden="true"><span>Source</span><span>Usage</span><span>Credits / cost</span></div><div class="mini-list">${snapshot.cards.map(c => {
+  return `<section class="mini-panel" aria-label="Mini dashboard"><div class="mini-context"><span>${esc(month)} · UTC${snapshot.demo ? ' · SAMPLE DATA' : ''}</span><span>~ partial history</span></div><div class="mini-head" aria-hidden="true"><span>Source</span><span>Usage</span><span>Credits / cost</span></div><div class="mini-list" data-count="${cards.length}">${cards.map(c => {
     const credit = miniCredit(c), reading = miniReading(c);
     const status = c.status === 'stale' ? 'Last reading · stale' : c.status === 'setup' ? 'Needs setup' : c.status === 'unconnected' ? 'Not connected' : c.status === 'refreshing' ? 'Refreshing' : 'Connected';
     const freshness = c.lastUpdatedAt ? `Updated ${new Date(c.lastUpdatedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : 'No reading yet';
