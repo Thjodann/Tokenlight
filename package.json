@@ -1,0 +1,21 @@
+{
+  "name": "tokenlight",
+  "productName": "Tokenlight",
+  "version": "0.2.0",
+  "private": true,
+  "description": "A personal desktop overview of AI account allowances and API usage.",
+  "type": "module",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.mjs",
+    "check": "node scripts/check.mjs",
+    "probe": "node scripts/probe-accounts.mjs",
+    "build": "node scripts/build.mjs",
+    "archive": "node scripts/archive.mjs"
+  },
+  "devDependencies": {
+    "electron": "45.2.1",
+    "sharp": "0.35.5"
+  }
+}

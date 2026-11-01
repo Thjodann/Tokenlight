@@ -1,0 +1,9 @@
+node_modules/
+.codex/
+.beads/
+.env
+.env.*
+secrets.env
+*.log
+.DS_Store
+.beads.gate.lock*
