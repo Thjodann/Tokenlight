@@ -11,7 +11,7 @@ import cachePolicy from '../src/credential-cache.cjs';
 const mainUrl = new URL('../src/main.cjs', import.meta.url);
 const main = await readFile(mainUrl, 'utf8');
 const require = createRequire(mainUrl);
-function createService(providers) {
+function createService(providers, sourceId = 'openai') {
   const module = { exports: {} };
   const electron = {
     app: { requestSingleInstanceLock: () => true, on() {}, whenReady: () => ({ then() {} }), getVersion: () => 'test' },
@@ -21,7 +21,7 @@ function createService(providers) {
     require: id => id === 'electron' ? electron : require(id), module,
     process: { env: {}, argv: [] }, __dirname: fileURLToPath(new URL('../src/', import.meta.url))
   });
-  module.exports.inject({ model: { currentMonth: () => '2026-10', SOURCES: [{ id: 'openai', kind: 'api' }] }, providers, insights: insightModel });
+  module.exports.inject({ model: { currentMonth: () => '2026-10', SOURCES: [{ id: sourceId, kind: sourceId === 'claude' ? 'account' : 'api' }] }, providers, insights: insightModel });
   const service = new module.exports.Service();
   service.settings = { secretsPath: null, targets: {}, refreshMinutes: 5, keychainAllowed: {} };
   service.persist = async () => {};
@@ -103,4 +103,33 @@ test('overlapping fee and charge saves retain both fields and concurrent appeara
  const second=s.setAccountProfile('openai',{field:'metered',month:'2026-10',value:30});
  s.settings.colorMode='light';release();await Promise.all([first,second]);
  assert.equal(s.settings.accountProfiles.openai.fees['2026-10'],20);assert.equal(s.settings.accountProfiles.openai.metered['2026-10'],30);assert.equal(s.settings.colorMode,'light');
+});
+
+
+test('returning to Tokenlight bypasses Claude auth backoff and fresh-cache reuse after renewal', async () => {
+  let calls = 0;
+  const service = createService({ loadCredentials: async () => ({}), readProvider: async () => { calls++; return { monthly: 42 }; } }, 'claude');
+  service.settings.keychainAllowed.claude = true;
+  service.cache['2026-10:claude'] = { monthly: 10, lastUpdatedAt: Date.now() };
+  service.errors['2026-10:claude'] = { code: 'setup', message: 'expired', retryAt: Date.now() + 300000 };
+  await service.recheckClaude();
+  assert.equal(service.snapshot().cards[0].status, 'ready');
+  assert.equal(service.snapshot().cards[0].monthly, 42);
+  await service.recheckClaude(); assert.equal(calls, 1, 'focus changes cannot flood Claude');
+});
+
+test('automatic Claude checks preserve Keychain consent and provider rate limits', async () => {
+  const service = createService({ loadCredentials: async () => ({}), readProvider: async () => assert.fail('must not read') }, 'claude');
+  await service.recheckClaude();
+  service.settings.keychainAllowed.claude = true;
+  service.errors['2026-10:claude'] = { code: 'rate_limit', retryAt: Date.now() + 300000 };
+  await service.recheckClaude();
+});
+
+test('an expired Claude token makes a recently cached reading due for a new check', async () => {
+  let calls = 0;
+  const service = createService({ loadCredentials: async () => ({}), readProvider: async () => { calls++; return { monthly: 43, sessionExpiresAt: Date.now() + 3600000 }; } }, 'claude');
+  service.settings.keychainAllowed.claude = true;
+  service.cache['2026-10:claude'] = { monthly: 10, lastUpdatedAt: Date.now(), sessionExpiresAt: Date.now() - 1000 };
+  await service.refresh('claude'); assert.equal(calls, 1); assert.equal(service.snapshot().cards[0].monthly, 43);
 });

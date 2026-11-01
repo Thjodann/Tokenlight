@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, safeStorage, nativeTheme } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, safeStorage, nativeTheme, powerMonitor } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const os = require('node:os');
@@ -6,6 +6,7 @@ const { spawn } = require('node:child_process');
 const { MODES, normalizeColorMode, backgroundColor, applyColorMode } = require('./appearance.cjs');
 const { LAYOUTS, MINIMUM, normalizeLayout, initialSize, LayoutController } = require('./layout.cjs');
 const { cacheAllowed, reconcileCredentials } = require('./credential-cache.cjs');
+const { createClaudeLogin } = require('./claude-login.cjs');
 
 if (process.env.TOKENLIGHT_PROFILE && path.isAbsolute(process.env.TOKENLIGHT_PROFILE)) app.setPath('userData', process.env.TOKENLIGHT_PROFILE);
 const single = app.requestSingleInstanceLock();
@@ -45,7 +46,7 @@ class Service {
         monthlyTarget: this.settings.targets[source.id] || null };
     });
     return { month: this.month, demo: this.demo, cards, version: app.getVersion(), updatedAt: Date.now(), fileError: this.fileError, vaultError: this.vaultError,
-      appearance: { dark: nativeTheme.shouldUseDarkColors },
+      claudeSignIn: this.claudeSignIn || null, appearance: { dark: nativeTheme.shouldUseDarkColors },
       settings: { secretsPath: this.settings.secretsPath, refreshMinutes: this.settings.refreshMinutes, colorMode: this.settings.colorMode, layoutMode: this.settings.layoutMode, accountProfiles: this.settings.accountProfiles || {}, targets: this.settings.targets, savedKeys: Object.keys(this.vault) } };
   }
   async setAccountProfile(id, value) {
@@ -101,7 +102,7 @@ class Service {
       const key = `${month}:${sourceId}`;
       if (this.inflight.has(key)) return this.inflight.get(key);
       if (!manual && this.errors[key]?.retryAt > Date.now()) return;
-      if (!manual && this.cache[key] && Date.now() - this.cache[key].lastUpdatedAt < (sourceId === 'cursor' ? 900000 : this.settings.refreshMinutes * 60000)) return;
+      if (!manual && !(sourceId === 'claude' && this.cache[key]?.sessionExpiresAt && this.cache[key].sessionExpiresAt <= Date.now()) && this.cache[key] && Date.now() - this.cache[key].lastUpdatedAt < (sourceId === 'cursor' ? 900000 : this.settings.refreshMinutes * 60000)) return;
       const epoch = this.credentialEpochs[sourceId];
       const current = () => this.credentialEpochs[sourceId] === epoch;
       const task = (async () => {
@@ -120,6 +121,14 @@ class Service {
       this.inflight.set(key, task); return task;
     }));
     return this.snapshot();
+  }
+  async recheckClaude() {
+    if (this.demo || !this.settings.keychainAllowed.claude || this.claudeSignIn?.pending) return;
+    const error = this.errors[`${this.month}:claude`];
+    if (error?.code === 'rate_limit' && error.retryAt > Date.now()) return;
+    if (this.lastClaudeRecheck && Date.now() - this.lastClaudeRecheck < 60000) return;
+    this.lastClaudeRecheck = Date.now();
+    return this.refresh('claude', true);
   }
   async saveKey(id, key) {
     if (!['openai', 'anthropic', 'elevenlabs', 'ollama'].includes(id)) throw new Error('Unknown provider.');
@@ -167,18 +176,18 @@ app.whenReady().then(async () => {
   handle('open-provider', async (id, purpose) => { const source = model.SOURCES.find(s => s.id === id); if (!source) return; if (purpose === 'pricing') { if (['openai', 'anthropic'].includes(id)) await shell.openExternal(id === 'openai' ? 'https://developers.openai.com/api/docs/pricing' : 'https://platform.claude.com/docs/en/about-claude/pricing'); return; } await shell.openExternal(purpose === 'credentials' && source.credentialUrl ? source.credentialUrl : source.dashboard); });
   handle('connect', id => service.refresh(id, true, true));
   handle('demo', async enabled => { service.demo = !!enabled; service.emit(); if (!enabled) service.refresh(null, true); return service.snapshot(); });
+  const claudeLogin = createClaudeLogin({ spawn, ownChildren, environment: process.env, cwd: service.dir,
+    onState: state => { service.claudeSignIn = state; service.emit(); },
+    onSuccess: async () => { await service.inflight.get(`${service.month}:claude`); await service.refresh('claude', true, true); if (service.errors[`${service.month}:claude`]) throw new Error('Usage unavailable'); } });
   handle('sign-in-claude', async () => {
+    if (service.demo) return 'Leave sample data to sign in.';
     const paths = ['/opt/homebrew/bin/claude', path.join(os.homedir(), '.local/bin/claude')]; let binary;
     for (const p of paths) { try { await fs.access(p); binary = p; break; } catch {} }
     if (!binary) throw new providers.ProviderError('Install Claude Code, run claude auth login, then choose Connect.', 'setup');
-    const env = { ...process.env }; delete env.ANTHROPIC_API_KEY;
-    const child = spawn(binary, ['auth', 'login'], { env, stdio: ['ignore', 'pipe', 'ignore'] }); ownChildren.add(child);
-    const timer = setTimeout(() => child.kill('SIGTERM'), 180000);
-    child.stdout.on('data', () => {});
-    child.on('error', () => { clearTimeout(timer); ownChildren.delete(child); });
-    child.on('exit', async code => { clearTimeout(timer); ownChildren.delete(child); if (code === 0) await service.refresh('claude', true, true); });
-    return 'Finish sign-in in your browser, then choose Connect.';
+    return claudeLogin.start(binary);
   });
+  window.on('focus', () => { void service.recheckClaude().catch(() => {}); });
+  powerMonitor.on('resume', () => { void service.recheckClaude().catch(() => {}); });
   handle('export', async () => {
     const r = await dialog.showSaveDialog(window, { title: 'Export usage snapshot', defaultPath: `Tokenlight-${service.month}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
     if (!r.canceled && r.filePath) { const snapshot = service.snapshot(), { cards, month, demo } = snapshot; await fs.writeFile(r.filePath, JSON.stringify({ month, demo, exportedAt: new Date().toISOString(), insights: insights.monthlyInsights(snapshot), sources: cards.map(({ scope, ...c }) => c) }, null, 2), { mode: 0o600 }); return 'Snapshot exported.'; }

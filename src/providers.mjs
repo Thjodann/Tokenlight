@@ -1,3 +1,4 @@
+import { selectClaudeSession, readClaudeUsage } from './claude-session.mjs';
 import { activityRow, aggregateActivity } from './activity.mjs';
 import { openaiCosts } from './openai-cost.mjs';
 import { normalizeOllama } from './ollama.mjs';
@@ -162,17 +163,19 @@ export async function claudeLocal(month, root = join(homedir(), '.claude/project
   return { daily, monthly: records.size ? daily.reduce((a, b) => a + b.value, 0) : null, partial, scannedFiles: files.length, modelUsage: aggregateActivity([...records.values()].map(r => r.activity)), requestCount: records.size || null };
 }
 async function claude(month, ctx) {
-  let record;
-  if (ctx.allowKeychain) {
-    try { const { stdout } = await exec('/usr/bin/security', ['find-generic-password', '-s', 'Claude Code-credentials', '-w'], { timeout: 15000, maxBuffer: 100000 }); record = JSON.parse(stdout).claudeAiOauth; } catch {}
-  }
-  if (!record) { try { record = JSON.parse(await readFile(join(homedir(), '.claude/.credentials.json'), 'utf8')).claudeAiOauth; } catch {} }
-  if (!record?.accessToken) throw new ProviderError('Sign in to Claude Code with your Max account, then choose Connect. API keys don’t connect your subscription.', 'setup');
-  if (record.expiresAt && record.expiresAt <= Date.now()) throw new ProviderError('Your Claude Code session has expired. Open Claude Code to sign in again.', 'setup');
-  const usage = await fetchJSON('https://api.anthropic.com/api/oauth/usage', { Authorization: `Bearer ${record.accessToken}`, 'anthropic-beta': 'oauth-2025-04-20' });
+  const load = async () => {
+    let keychain, fallback;
+    if (ctx.allowKeychain) {
+      try { const { stdout } = await exec('/usr/bin/security', ['find-generic-password', '-s', 'Claude Code-credentials', '-w'], { timeout: 15000, maxBuffer: 100000 }); keychain = JSON.parse(stdout).claudeAiOauth; } catch {}
+    }
+    try { fallback = JSON.parse(await readFile(join(homedir(), '.claude/.credentials.json'), 'utf8')).claudeAiOauth; } catch {}
+    return selectClaudeSession(keychain, fallback);
+  };
+  const { record, usage } = await readClaudeUsage({ load, ErrorType: ProviderError,
+    request: token => fetchJSON('https://api.anthropic.com/api/oauth/usage', { Authorization: `Bearer ${token}`, 'anthropic-beta': 'oauth-2025-04-20' }) });
   const result = normalizeClaude(usage), local = await claudeLocal(month);
   if (!result.windows.length && !result.creditBalances.length && !result.paidUsage) throw new ProviderError('Claude returned no allowance or credit measurement. Check your plan in its usage dashboard.', 'coverage');
-  return { ...result, ...local, partial: true, plan: record.subscriptionType ?? 'Max', scope: identity(record.accessToken), sourceLabel: 'Claude Code account connection', coverage: 'Tokens from local Code logs only · UTC. Allowances are account-wide.', connectionNote: 'The personal account interface may change. Local token history excludes other devices and remote sessions.' };
+  return { ...result, ...local, partial: true, plan: record.subscriptionType ?? 'Max', sessionExpiresAt: Number(record.expiresAt) || null, scope: identity(record.accessToken), sourceLabel: 'Claude Code account connection', coverage: 'Tokens from local Code logs only · UTC. Allowances are account-wide.', connectionNote: 'The personal account interface may change. Local token history excludes other devices and remote sessions.' };
 }
 async function apiUsage(id, month, ctx) {
   const key = ctx.credentials[id];
