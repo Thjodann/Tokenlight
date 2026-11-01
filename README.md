@@ -69,7 +69,7 @@ The Anthropic API card reads model costs through the Analytics cost endpoint and
 
 OpenAI/Codex share teal, Anthropic/Claude share terracotta, Cursor is violet, ElevenLabs blue and Ollama gold. Original provider marks are bundled for offline use; see [mark provenance](docs/provider-marks.md). The colors continue through cards, connections, detail sheets and mini rows in both appearances.
 
-Resize the window to choose the layout automatically. The source dashboard packs all seven readings into tiles or compact rows. Below 360 pixels wide, at short heights, or in small windows, Mini uses a compact list with the same Overview, Accounts, API usage and Insights filters. The manual Mini/Full button is removed. View → Mini dashboard (⌘⇧M) remains an optional window-size preset. At the 260×180 minimum all seven rows fit; source detail sheets can scroll.
+Resize the window to choose the layout automatically. Desktop windows use an aligned provider ledger with monthly totals, current allowance bars and credits, plus a daily source chart and model mileage. Shorter or narrower windows pack readings into tiles or compact rows. Below 360 pixels wide, at short heights, or in small windows, Mini uses a compact list with the same Overview, Accounts, API usage and Insights filters. The manual Mini/Full button is removed. View → Mini dashboard (⌘⇧M) remains an optional window-size preset. At the 260×180 minimum all seven rows fit; source detail sheets can scroll.
 
 Mini's left metric is selected-month activity when reported, otherwise a current allowance percentage. `~` marks incomplete history. Its right metric is the first reported credit balance or allowance value, or explicitly labeled API cost. Hover or open a row for its meaning; other balances, reset passes, Cursor pools and Fable detail remain in the source sheet. A dash means unreported, not zero. Current allowances and balances remain current when viewing a historical month. Refresh, connections and color mode remain accessible in mini.
 
@@ -79,5 +79,5 @@ The **Insights** tab shows known monthly costs separately from reported or estim
 
 Panoramic windows use a horizontal instrument rail when there is room. Other window shapes use an adaptive grid or compact rows before any source is clipped. Extra summary metrics appear only when space allows; the full breakdown remains in Insights. Inspect [spending definitions and pricing provenance](docs/spending-and-insights.md) for scope, exclusions, estimates and known data limits.
 
-0.5.1 makes the source dashboard fit the available width and height with adaptive tiles/rows; Mini keeps all seven rows in view.
+0.5.2 replaces stretched desktop tiles with a shared console, retaining adaptive tiles/rows at smaller sizes and all seven Mini rows. The approved Signal T logo and app icon ship together. See [desktop behavior](docs/desktop-dashboard.md).
 Snapshot export stays available in the toolbar at every size.

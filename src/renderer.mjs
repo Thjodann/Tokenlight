@@ -1,4 +1,5 @@
 import { insightsPage, financeDetails, cardCosts } from './insight-view.mjs';
+import { DESKTOP_QUERY } from './desktop-view.mjs';
 import { wideView, WIDE_QUERY, instrumentLayout } from './wide-view.mjs';
 import { providerFor, providerLogo } from './provider-branding.mjs';
 import { miniView, MINI_QUERY } from './mini-view.mjs';
@@ -7,8 +8,10 @@ import { brandMark } from './brand.mjs';
 import { SOURCES, currentMonth, formatCount, finite, resetCountdown } from './model.mjs';
 const compactQuery = window.matchMedia(MINI_QUERY);
 const wideQuery = window.matchMedia(WIDE_QUERY);
+const desktopQuery = window.matchMedia(DESKTOP_QUERY);
 const $ = s => document.querySelector(s);
 const api = window.tokenlight;
+let dashboardSource = null;
 let snapshot, view = 'overview', selected = null, detailDirty = false, toastTimer, currentMini = false;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const monthName = value => new Date(value + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -88,8 +91,9 @@ function render() {
   $('#breadcrumb').textContent = names[view][0];
   const sections = view === 'insights' ? insightsPage(snapshot) : ['account', 'api'].filter(k => view === 'overview' || k === view).map(kind => `<section aria-label="${kind === 'account' ? 'AI accounts' : 'API usage'}"><div class="section-heading"><div class="section-label"><h2>${kind === 'account' ? 'AI accounts' : 'API usage'}</h2><span>${snapshot.cards.filter(c => c.kind === kind).length}</span></div><p>${kind === 'account' ? 'Account activity & current allowances' : 'Calendar month · UTC'}</p></div><div class="cards" data-kind="${kind}">${selectedCards.filter(c => c.kind === kind).map(card).join('')}</div></section>`).join('');
   const dashboard = `${snapshot.demo ? '<div class="demo-banner"><strong>Sample data</strong><span>These readings are examples. Live connections are paused.</span><button class="button" data-action="live">Use live data</button></div>' : ''}<div class="page-heading"><div><span class="eyebrow">MONTHLY ACTIVITY</span><h1>${names[view][1]}</h1><p class="page-description">${names[view][2]}</p></div><div class="period-picker" aria-label="Reporting month"><button class="icon-button" data-action="previous" aria-label="Previous month">‹</button><input type="month" id="month-control" value="${snapshot.month}" min="2020-01" max="${currentMonth()}" aria-label="Choose reporting month"><button class="icon-button" data-action="next" aria-label="Next month" ${snapshot.month === currentMonth() ? 'disabled' : ''}>›</button></div></div><div class="overview-stats"><div class="overview-stat"><span class="stat-symbol" aria-hidden="true">⌁</span><div><p class="stat-label">Connected sources</p><p class="stat-value">${connected}<span>of ${snapshot.cards.length} sources</span></p></div></div><div class="overview-stat"><span class="stat-symbol" aria-hidden="true">${needs ? '◌' : '✓'}</span><div><p class="stat-label">Needs attention</p><p class="stat-value">${busy && !connected ? 'Checking' : needs ? `${needs} source${needs === 1 ? '' : 's'}` : 'All connected'}</p></div></div><div class="overview-stat"><span class="stat-symbol" aria-hidden="true">◷</span><div><p class="stat-label">Next allowance reset</p><p class="stat-value">${next ? reset(next.resetsAt) : 'Not reported'}<span>${next ? new Date(next.resetsAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}</span></p></div></div></div>${snapshot.fileError ? `<div class="attention-banner"><span>${esc(snapshot.fileError)}</span><button data-action="connections">Choose file</button></div>` : ''}${sections}<footer class="page-footer"><p><span aria-hidden="true">◈</span>Data stays on your Mac. Each source keeps its own units and allowance window.</p><button data-action="export">Export snapshot ↗</button></footer>`;
-  $('#main').innerHTML = `<div class="dashboard-content">${dashboard}</div><div class="wide-content">${wideView(snapshot,view)}</div>${miniView(snapshot,view)}`;
+  $('#main').innerHTML = `<div class="dashboard-content">${dashboard}</div><div class="wide-content">${wideView(snapshot,view,{desktop:desktopQuery.matches,selectedId:dashboardSource})}</div>${miniView(snapshot,view)}`;
   fitInstruments();
+  $('#analytics-source')?.addEventListener('change', e => { dashboardSource = e.target.value; render(); });
   for (const button of document.querySelectorAll('[data-view]')) { button.classList.toggle('active', button.dataset.view === view); button.setAttribute('aria-current', button.dataset.view === view ? 'page' : 'false'); }
   for (const monthControl of document.querySelectorAll('input[type="month"]')) monthControl.addEventListener('change', async e => {
     const month = e.target.value;
@@ -160,6 +164,7 @@ async function action(name, id) {
 document.addEventListener('click', e => { const close = e.target.closest('[data-close]'); if (close) return $('#' + close.dataset.close).close(); const button = e.target.closest('[data-action]'); if (button) action(button.dataset.action, button.dataset.id); const nav = e.target.closest('[data-view]'); if (nav) { view = nav.dataset.view; render(); } });
 compactQuery.addEventListener('change', () => render());
 wideQuery.addEventListener('change', () => render());
+desktopQuery.addEventListener('change', () => render());
 new ResizeObserver(fitInstruments).observe($('#main'));
 $('.brand-symbol').innerHTML = brandMark();
 $('#connections-button').addEventListener('click', showConnections);
