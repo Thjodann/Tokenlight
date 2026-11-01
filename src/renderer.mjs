@@ -3,6 +3,7 @@ import { wideView, WIDE_QUERY, instrumentLayout } from './wide-view.mjs';
 import { providerFor, providerLogo } from './provider-branding.mjs';
 import { miniView, MINI_QUERY } from './mini-view.mjs';
 import { creditSection } from './credit-view.mjs';
+import { brandMark } from './brand.mjs';
 import { SOURCES, currentMonth, formatCount, finite, resetCountdown } from './model.mjs';
 const compactQuery = window.matchMedia(MINI_QUERY);
 const wideQuery = window.matchMedia(WIDE_QUERY);
@@ -160,6 +161,7 @@ document.addEventListener('click', e => { const close = e.target.closest('[data-
 compactQuery.addEventListener('change', () => render());
 wideQuery.addEventListener('change', () => render());
 new ResizeObserver(fitInstruments).observe($('#main'));
+$('.brand-symbol').innerHTML = brandMark();
 $('#connections-button').addEventListener('click', showConnections);
 $('#appearance-mode').addEventListener('change', () => run(() => api.appearance($('#appearance-mode').value)));
 $('#refresh-button').addEventListener('click', () => run(() => api.refresh()));
