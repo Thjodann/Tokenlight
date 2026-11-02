@@ -1,4 +1,5 @@
 import { selectClaudeSession, readClaudeUsage } from './claude-session.mjs';
+import { cursorStoragePassword } from './cursor-storage.mjs';
 import { activityRow, aggregateActivity } from './activity.mjs';
 import { openaiCosts } from './openai-cost.mjs';
 import { normalizeOllama } from './ollama.mjs';
@@ -100,8 +101,7 @@ async function cursorSession(allowKeychain) {
   if (token.startsWith('cursor-safe-storage:v1:')) {
     if (!allowKeychain) throw new ProviderError('Choose Connect to allow access to your encrypted Cursor session.', 'setup');
     try {
-      const { stdout } = await exec('/usr/bin/security', ['find-generic-password', '-s', 'Cursor Safe Storage', '-a', 'Cursor', '-w'], { timeout: 15000 });
-      const key = pbkdf2Sync(stdout.trim(), 'saltysalt', 1003, 16, 'sha1');
+      const key = pbkdf2Sync(await cursorStoragePassword(exec), 'saltysalt', 1003, 16, 'sha1');
       const encrypted = Buffer.from(token.slice('cursor-safe-storage:v1:'.length), 'base64');
       if (encrypted.subarray(0, 3).toString() !== 'v10') throw new Error();
       const cipher = createDecipheriv('aes-128-cbc', key, Buffer.alloc(16, 32));
