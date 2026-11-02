@@ -5,6 +5,13 @@ import { SOURCES } from '../src/model.mjs';
 import { demoCards } from '../src/fixtures.mjs';
 import { MARKS, providerFor, providerLogo } from '../src/provider-branding.mjs';
 import { miniReading, miniCredit, miniView } from '../src/mini-view.mjs';
+test('mini credit summary prioritizes a reached paid cap without discarding a separate allowance', () => {
+  const card = { paidUsage: { capReached: true, used: 21.31, limit: 20, unit: 'USD' }, creditBalances: [{ label: 'Fable allowance remaining', value: 198.38, unit: 'USD', allowance: true }] };
+  assert.equal(miniCredit(card).text, 'Cap reached');
+  assert.match(miniCredit(card).title, /\$21.31/);
+  assert.match(miniCredit(card).title, /\$198.38/);
+  assert.match(miniCredit(card).title, /separate/);
+});
 import layout from '../src/layout.cjs';
 
 test('all seven sources share five original, self-contained provider marks', () => {

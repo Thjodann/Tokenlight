@@ -11,6 +11,8 @@ export function miniReading(card) {
 }
 export function miniCredit(card) {
   const b = card.creditBalances?.find(b => b.unit !== 'resets' && (b.unlimited || finite(b.value)));
+  const p = card.paidUsage;
+  if (p?.capReached === true) return { text: 'Cap reached', title: `Monthly spend cap reached · paid usage unavailable${finite(p.used) && finite(p.limit) ? ` · ${creditAmount(p.used, p.unit)} used of ${creditAmount(p.limit, p.unit)}` : ''}${b ? ` · ${b.label}: ${b.unlimited ? 'Unlimited' : creditAmount(b.value, b.unit)} (separate reported allowance/balance)` : ''}` };
   if (b) return { text: b.unlimited ? 'Unlimited' : b.unit === 'credits' ? `${formatCount(b.value)} cr` : `${b.label.startsWith('Fable') ? 'F ' : ''}${creditAmount(b.value, b.unit)}`, title: `${b.label}: ${b.unlimited ? 'Unlimited' : creditAmount(b.value, b.unit)}${b.allowance ? ' · allowance value, not a charge' : ''}` };
   if (finite(card.apiCost?.total)) return { text: `${creditAmount(card.apiCost.total, card.apiCost.unit)} cost`, title: `${creditAmount(card.apiCost.total, card.apiCost.unit)} reported API cost for the selected month, before credits` };
   return { text: '—', title: 'Credit balance not reported' };

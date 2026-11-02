@@ -32,6 +32,26 @@ test('opaque Claude fields need their confirmed full shape; explicit Fable zero 
   assert.equal(r.paidUsage.limit, null); assert.deepEqual(r.creditBalances, []);
   assert.match(creditSection(r), /Paid credit balance not reported/); assert.match(creditSection(r), /Paid usage is disabled/);
 });
+test('Claude cap exhaustion remains visible beside a separate positive Fable allowance', () => {
+  const r = normalizeClaude({
+    iguana_necktie: { utilization: 20.648366, limit_dollars: 250, used_dollars: 51.620915, remaining_dollars: 198.379085, resets_at: '2026-11-05T07:59:00Z' },
+    spend: { enabled: false, used: { amount_minor: 2131, exponent: 2, currency: 'USD' }, limit: { amount_minor: 2000, exponent: 2, currency: 'USD' }, balance: null },
+    extra_usage: { is_enabled: false, spend_limit_reached: true, user_disabled: false }
+  });
+  assert.equal(r.paidUsage.capReached, true);
+  assert.equal(r.creditBalances[0].value, 198.379085, 'a separate allowance must not be replaced with an invented zero');
+  assert.match(creditSection(r), /Monthly spend cap reached/);
+  assert.doesNotMatch(creditSection(r), /Paid usage is disabled/);
+  assert.match(r.creditNote, /not a spendable cash balance/);
+});
+test('Claude paid-usage cap detection distinguishes an explicit block, an enabled cap and unknown limits', () => {
+  assert.equal(normalizeClaude({ extra_usage: { spend_limit_reached: true } }).paidUsage.capReached, true);
+  const money = amount_minor => ({ amount_minor, exponent: 2, currency: 'USD' });
+  assert.equal(normalizeClaude({ spend: { enabled: true, used: money(2000), limit: money(2000) } }).paidUsage.capReached, true);
+  assert.equal(normalizeClaude({ spend: { enabled: true, used: money(1000), limit: money(2000) } }).paidUsage.capReached, false);
+  assert.equal(normalizeClaude({ spend: { enabled: false, used: money(2000), limit: null } }).paidUsage.capReached, false);
+  assert.equal(normalizeClaude({ spend: { used: money(2000), limit: { ...money(2000), currency: 'EUR' } } }).paidUsage.capReached, false);
+});
 test('legacy Claude spending uses explicit currency precision, never infers cents', () => {
   assert.equal(normalizeClaude({ extra_usage: { is_enabled: true, used_credits: 125, monthly_limit: 2000, decimal_places: 2, currency: 'USD' } }).paidUsage.used, 1.25);
   assert.equal(normalizeClaude({ extra_usage: { is_enabled: true, used_credits: 125, monthly_limit: 2000 } }).paidUsage.used, null);

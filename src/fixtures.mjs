@@ -15,7 +15,7 @@ export function demoCards(month, now = Date.now()) {
       creditBalances: i === 0 ? [{ label: 'Available credits', value: 44366.09, unit: 'credits' }, { label: 'Allowance resets available', value: 1, unit: 'resets' }] : i === 1 ? [{ label: 'Fable allowance remaining', value: 242.83, unit: 'USD', allowance: true, used: 7.17, limit: 250, resetsAt: now + 345600000 }] : i === 5 ? [{ label: 'Subscription credits remaining', value: 325800, unit: 'credits', allowance: true, resetsAt: now + 864000000 }] : i === 6 ? [{ label: 'Included credits remaining', value: 72.5, unit: 'USD', allowance: true, resetsAt: now + 1296000000 }, { label: 'Purchased credit balance', value: 25, unit: 'USD' }] : [],
       apiCost: i === 4 ? { total: 18.35, models: [{ model: 'claude-fable-5-1', amount: 12.5 }, { model: 'claude-sonnet-5-5', amount: 5.85 }], month, unit: 'USD', asOf: new Date(now).toISOString() } : null,
       paidUsage: i === 1 ? { enabled: true, used: 0, limit: 20, unit: 'USD' } : null,
-      creditNote: i === 1 ? 'Fable amounts are allowance value, not billed charges. Fable shares the account’s overall usage limits. Paid credit balance is not reported by this connection.' : null,
+      creditNote: i === 1 ? 'Fable amounts are allowance value, not billed charges. The reported allowance is not a spendable cash balance or confirmation of model access. Paid credit balance is not reported by this connection.' : null,
       balanceSummary: source.id === 'ollama' ? '$72.50 included remaining · $25.00 purchased' : null,
       breakdown: i !== 5 ? { input, output, cache: monthly - input - output } : null };
   });

@@ -10,4 +10,6 @@ Anthropic controls expiry and revocation. This repair prevents stale credential 
 
 References: [Claude authentication](https://code.claude.com/docs/en/authentication), [CLI reference](https://code.claude.com/docs/en/cli-reference).
 
+The Fable dollar allowance and paid-usage cap are separate measurements. A positive reported allowance does not establish that a model can run. Preserve explicit spend-cap exhaustion flags; when the provider omits the flag, compare known same-currency spending and a positive monthly cap. Show cap exhaustion in credit details and compact/desktop summaries without zeroing the independent allowance or marking a working account connection as disconnected. Pro and Max plans have different Fable entitlements; local credential plan metadata alone is not a live entitlement check. See [Fable on your plan](https://support.claude.com/en/articles/15424964-claude-fable-models-on-your-plan).
+
 Verification: credential-selection/rotation/error regression tests, actual service focus/backoff tests, CLI lifecycle tests and an actual packaged browser sign-in, and a fresh live usage read. The installed-app verification report records the final seven-source sync separately.

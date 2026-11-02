@@ -4,6 +4,17 @@ import { desktopView, reportedDays } from '../src/desktop-view.mjs';
 import { wideView } from '../src/wide-view.mjs';
 import { demoCards } from '../src/fixtures.mjs';
 const snapshot = {month:'2026-10',settings:{},cards:demoCards('2026-10'),demo:true};
+test('desktop and wide layouts expose an exhausted paid cap with or without a separate allowance', () => {
+  for (const creditBalances of [[], [{ label:'Fable allowance remaining',value:198.38,unit:'USD',allowance:true }]]) {
+    const s={...snapshot,cards:[{...snapshot.cards[1],creditBalances,paidUsage:{capReached:true,used:21.31,limit:20,unit:'USD'}}]};
+    for (const desktop of [true,false]) {
+      const html=wideView(s,'overview',{desktop});
+      assert.match(html,/>Cap reached</);
+      assert.match(html,/paid usage unavailable/);
+      assert.match(html,/\$21.31 used of \$20.00/);
+    }
+  }
+});
 test('desktop ledger preserves seven sources, filters and source details without stretched tiles', () => {
   for(const [view,count] of [['overview',7],['account',3],['api',4]]) {
     const html = wideView(snapshot,view,{desktop:true});

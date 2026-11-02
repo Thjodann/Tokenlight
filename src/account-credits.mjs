@@ -33,9 +33,11 @@ export function claudeCredits(usage) {
   if (!spend) { used = legacyMoney(legacy?.used_credits); limit = legacyMoney(legacy?.monthly_limit); }
   if (balance) creditBalances.push({ label: 'Paid credit balance', ...balance });
   const enabled = typeof spend?.enabled === 'boolean' ? spend.enabled : typeof legacy?.is_enabled === 'boolean' ? legacy.is_enabled : null;
-  const paidUsage = used || limit || enabled != null ? { enabled, used: used?.value ?? null, limit: limit && (!used || used.unit === limit.unit) ? limit.value : null, unit: used?.unit ?? limit?.unit ?? null, period: 'Current month' } : null;
+  const reportedCap = spend?.limit_reached ?? legacy?.spend_limit_reached;
+  const capReached = typeof reportedCap === 'boolean' ? reportedCap : !!(used && limit && used.unit === limit.unit && limit.value > 0 && used.value >= limit.value);
+  const paidUsage = used || limit || enabled != null || capReached ? { enabled, capReached, used: used?.value ?? null, limit: limit && (!used || used.unit === limit.unit) ? limit.value : null, unit: used?.unit ?? limit?.unit ?? null, period: 'Current month' } : null;
   const fablePercent = creditNumber(fable?.utilization);
   return { creditBalances, paidUsage,
     fableWindow: (usage.seven_day_fable || fableShape) && fablePercent != null ? { label: 'Fable · 7 day', pool: 'fable', percent: fablePercent, resetsAt: Number.isFinite(Date.parse(fable.resets_at)) ? Date.parse(fable.resets_at) : null } : null,
-    creditNote: `${fableShape ? 'Fable amounts are allowance value, not billed charges. Fable shares the account’s overall usage limits. ' : ''}${!balance ? 'Paid credit balance is not reported by this connection. ' : ''}Paid usage and its monthly cap are separate from API billing. Balances and allowances are current, regardless of the selected activity month.` };
+    creditNote: `${fableShape ? 'Fable amounts are allowance value, not billed charges. The reported allowance is not a spendable cash balance or confirmation of model access. ' : ''}${!balance ? 'Paid credit balance is not reported by this connection. ' : ''}Paid usage and its monthly cap are separate from API billing. Balances and allowances are current, regardless of the selected activity month.` };
 }
