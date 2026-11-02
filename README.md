@@ -1,7 +1,8 @@
 # Tokenlight
-
 <img width="1728" alt="Tokenlight Dashboard" src="https://github.com/user-attachments/assets/4502b391-8cd0-40ca-9857-80b59f03d1fb" />
-<img width="1728" alt="Tokenlight Usage" src="https://github.com/user-attachments/assets/3d80db90-4fcb-411c-a357-cd912df9edac" />
+<img width="1728" alt="Compact View" src="https://github.com/user-attachments/assets/9c24b9cd-f1f4-4108-8e53-b6196347d5cd" />
+
+<sup><sub>(Dummy data pictured above)</sub></sup>
 
 A personal macOS app for viewing OpenAI/Codex, Anthropic/Claude Code, Cursor, ElevenLabs and Ollama Cloud usage. Source and scaffold are retained until human acceptance.
 
