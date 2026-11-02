@@ -7,3 +7,4 @@ secrets.env
 *.log
 .DS_Store
 .beads.gate.lock*
+graft/

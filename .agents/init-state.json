@@ -1,0 +1,19 @@
+{
+  "revision": 3,
+  "tools": {
+    "graft": "0.28.1"
+  },
+  "components": {
+    "graft": "wired"
+  },
+  "graft": {
+    "agents": [
+      "agents"
+    ],
+    "global": false,
+    "mcp": false,
+    "hooks": false,
+    "statusline": false,
+    "graph": "wiring"
+  }
+}
