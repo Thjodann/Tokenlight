@@ -6,6 +6,8 @@ const { spawn } = require('node:child_process');
 const { MODES, normalizeColorMode, backgroundColor, applyColorMode } = require('./appearance.cjs');
 const { LAYOUTS, MINIMUM, normalizeLayout, initialSize, LayoutController } = require('./layout.cjs');
 const { cacheAllowed, reconcileCredentials } = require('./credential-cache.cjs');
+const { DashboardWindows } = require('./dashboard-windows.cjs');
+const dashboards = new DashboardWindows();
 const { createClaudeLogin } = require('./claude-login.cjs');
 
 if (process.env.TOKENLIGHT_PROFILE && path.isAbsolute(process.env.TOKENLIGHT_PROFILE)) app.setPath('userData', process.env.TOKENLIGHT_PROFILE);
@@ -13,7 +15,7 @@ const single = app.requestSingleInstanceLock();
 if (!single) app.quit();
 let window, model, providers, fixture, service, layoutController, insights;
 const ownChildren = new Set();
-app.on('second-instance', () => { if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } });
+app.on('second-instance', () => { if (window && !window.isDestroyed()) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } else if (service) app.emit('activate'); });
 app.on('before-quit', () => { for (const child of ownChildren) child.kill('SIGTERM'); });
 const safeError = e => e instanceof providers.ProviderError ? e.message : 'Something interrupted this reading. Try again.';
 
@@ -38,14 +40,14 @@ class Service {
     this.writeQueue = this.writeQueue.catch(() => {}).then(async () => { const file = path.join(this.dir, name); await fs.writeFile(file + '.tmp', JSON.stringify(data), { mode: 0o600 }); await fs.rename(file + '.tmp', file); });
     return this.writeQueue;
   }
-  snapshot() {
-    const cards = this.demo ? fixture.demoCards(this.month, this.demoAt).map(c => ({ ...c, monthlyTarget: this.settings.targets[c.id] || null })) : model.SOURCES.map(source => {
-      const key = `${this.month}:${source.id}`, cached = this.cache[key], error = this.errors[key];
+  snapshot(month = this.month) {
+    const cards = this.demo ? fixture.demoCards(month, this.demoAt).map(c => ({ ...c, monthlyTarget: this.settings.targets[c.id] || null })) : model.SOURCES.map(source => {
+      const key = `${month}:${source.id}`, cached = this.cache[key], error = this.errors[key];
       const showCache = cached && cacheAllowed(source.id, cached, this.credentialScopes) && !['setup', 'auth', 'file'].includes(error?.code);
       return { ...source, ...(showCache ? cached : {}), status: this.busy.has(key) ? 'refreshing' : error ? showCache ? 'stale' : 'setup' : showCache ? 'ready' : 'unconnected', error: error?.message || null, errorCode: error?.code, retryAt: error?.retryAt,
         monthlyTarget: this.settings.targets[source.id] || null };
     });
-    return { month: this.month, demo: this.demo, cards, version: app.getVersion(), updatedAt: Date.now(), fileError: this.fileError, vaultError: this.vaultError,
+    return { month, demo: this.demo, cards, version: app.getVersion(), updatedAt: Date.now(), fileError: this.fileError, vaultError: this.vaultError,
       claudeSignIn: this.claudeSignIn || null, appearance: { dark: nativeTheme.shouldUseDarkColors },
       settings: { secretsPath: this.settings.secretsPath, refreshMinutes: this.settings.refreshMinutes, colorMode: this.settings.colorMode, layoutMode: this.settings.layoutMode, accountProfiles: this.settings.accountProfiles || {}, targets: this.settings.targets, savedKeys: Object.keys(this.vault) } };
   }
@@ -75,7 +77,8 @@ class Service {
     if (!MODES.includes(mode)) throw new Error('Choose Auto, Dark, or Light.');
     this.settings.colorMode = mode;
     await this.persist('settings.json', this.settings);
-    applyColorMode(mode, nativeTheme, window);
+    applyColorMode(mode, nativeTheme);
+    for (const e of dashboards.entries.values()) e.window.setBackgroundColor(backgroundColor(nativeTheme.shouldUseDarkColors));
     for (const value of MODES) {
       const item = Menu.getApplicationMenu()?.getMenuItemById(`appearance-${value}`);
       if (item) item.checked = value === mode;
@@ -83,10 +86,10 @@ class Service {
     this.emit();
     return this.snapshot();
   }
-  emit() { if (window && !window.isDestroyed()) window.webContents.send('snapshot', this.snapshot()); }
-  async refresh(id = null, manual = false, allowKeychain = false) {
+  emit() { dashboards.broadcast(month => this.snapshot(month)); }
+  async refresh(id = null, manual = false, allowKeychain = false, month = this.month) {
     if (this.demo) { this.emit(); return this.snapshot(); }
-    const month = this.month, ids = id ? [id] : model.SOURCES.map(s => s.id);
+    const ids = id ? [id] : model.SOURCES.map(s => s.id);
     let credentials;
     try { credentials = await providers.loadCredentials(this.settings.secretsPath, this.vault); this.fileError = null; }
     catch (e) { this.fileError = safeError(e); credentials = { ...this.vault }; }
@@ -147,59 +150,88 @@ app.whenReady().then(async () => {
   [model, providers, fixture, insights] = await Promise.all([import('./model.mjs'), import('./providers.mjs'), import('./fixtures.mjs'), import('./insights.mjs')]);
   service = new Service(); await service.init();
   applyColorMode(service.settings.colorMode, nativeTheme);
-  const [width, height] = initialSize(process.env.TOKENLIGHT_WINDOW_SIZE, service.settings.layoutMode);
-  window = new BrowserWindow({ title: 'Tokenlight', width, height, minWidth: MINIMUM.width, minHeight: MINIMUM.height, show: false, backgroundColor: backgroundColor(nativeTheme.shouldUseDarkColors), titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 10 },
-    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false, backgroundThrottling: false } });
-  layoutController = new LayoutController(window, service.settings.layoutMode);
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  window.webContents.on('will-navigate', event => event.preventDefault());
-  window.webContents.session.setPermissionRequestHandler((_wc, _permission, cb) => cb(false));
-  const handle = (channel, fn) => ipcMain.handle(channel, async (event, ...args) => {
-    if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) throw new Error('Unknown caller.');
-    try { return { ok: true, value: await fn(...args) }; }
-    catch (e) { return { ok: false, error: e instanceof providers.ProviderError ? e.message : ['save-key', 'set-target', 'set-account-profile'].includes(channel) ? e.message : 'The action could not finish. Please try again.' }; }
+  const focused = () => dashboards.entries.get(BrowserWindow.getFocusedWindow()?.webContents);
+  const updateMenu = () => {
+    const entry = focused(), menu = Menu.getApplicationMenu();
+    for (const id of ['connections', 'refresh-usage', 'mini-layout', 'appearance-menu']) {
+      const item = menu?.getMenuItemById(id); if (item) item.enabled = !!entry && !entry.dashboard;
+    }
+  };
+  const createWindow = async (source = null) => {
+    const kiosk = !!source;
+    const [width, height] = source ? source.window.getSize() : initialSize(process.env.TOKENLIGHT_WINDOW_SIZE, service.settings.layoutMode);
+    const browser = new BrowserWindow({ title: kiosk ? 'Tokenlight — Dashboard' : 'Tokenlight', width, height, minWidth: MINIMUM.width, minHeight: MINIMUM.height, show: false, backgroundColor: backgroundColor(nativeTheme.shouldUseDarkColors), titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 10 },
+      webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false, backgroundThrottling: false } });
+    const entry = dashboards.add(browser, { kiosk, view: source?.view, month: source?.month || service.month, followCurrent: source ? source.followCurrent : service.followCurrent });
+    if (!kiosk) { window = browser; layoutController = new LayoutController(browser, service.settings.layoutMode); }
+    browser.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    browser.webContents.on('will-navigate', event => event.preventDefault());
+    browser.webContents.session.setPermissionRequestHandler((_wc, _permission, cb) => cb(false));
+    browser.on('focus', () => { updateMenu(); void service.recheckClaude().catch(() => {}); });
+    browser.once('closed', () => { if (!kiosk) { window = null; layoutController = null; } updateMenu(); });
+    try { await browser.loadFile(path.join(__dirname, 'index.html')); if (!browser.isDestroyed()) browser.show(); }
+    catch (error) { if (!browser.isDestroyed()) browser.close(); throw error; }
+    return entry;
+  };
+  const handle = (channel, fn, readOnly = false) => ipcMain.handle(channel, async (event, ...args) => {
+    try {
+      const entry = dashboards.authorize(event, readOnly);
+      const value = channel === 'get-snapshot' ? service.snapshot(entry.month) : await fn(entry, ...args);
+      return { ok: true, value: value?.cards ? dashboards.snapshot(entry, value) : value };
+    } catch (e) { return { ok: false, error: e instanceof providers.ProviderError || ['save-key', 'set-target', 'set-account-profile', 'get-snapshot'].includes(channel) ? e.message : 'The action could not finish. Please try again.' }; }
   });
-  handle('get-snapshot', () => service.snapshot());
-  handle('set-appearance', mode => service.setColorMode(mode));
-  handle('set-layout', mode => service.setLayoutMode(mode));
-  handle('set-account-profile', (id, value) => service.setAccountProfile(id, value));
-  nativeTheme.on('updated', () => { window.setBackgroundColor(backgroundColor(nativeTheme.shouldUseDarkColors)); service.emit(); });
-  handle('refresh', id => service.refresh(id, true));
-  handle('set-month', async month => { model.monthRange(month); if (month > model.currentMonth() || month < '2020-01') throw new providers.ProviderError(`Choose a month from January 2020 through ${new Date(model.currentMonth() + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}.`, 'validation'); service.month = month; service.followCurrent = month === model.currentMonth(); service.emit(); service.refresh(); return service.snapshot(); });
-  handle('save-key', (id, key) => service.saveKey(id, key));
-  handle('set-target', async (id, target) => { if (!model.SOURCES.some(s => s.id === id) || (target !== null && (!model.finite(target) || target <= 0 || target > Number.MAX_SAFE_INTEGER))) throw new Error('Enter a positive monthly token or credit target.'); service.settings.targets[id] = target; await service.persist('settings.json', service.settings); service.emit(); return service.snapshot(); });
-  handle('choose-secrets', async () => {
+  handle('get-snapshot', null, true);
+  handle('set-window-view', (entry, view) => { dashboards.setView(entry, view); });
+  handle('new-dashboard-window', async entry => { await createWindow(entry); return null; });
+  handle('set-appearance', (_entry, mode) => service.setColorMode(mode));
+  handle('set-layout', (_entry, mode) => service.setLayoutMode(mode));
+  handle('set-account-profile', (_entry, id, value) => service.setAccountProfile(id, value));
+  nativeTheme.on('updated', () => { for (const e of dashboards.entries.values()) e.window.setBackgroundColor(backgroundColor(nativeTheme.shouldUseDarkColors)); service.emit(); });
+  handle('refresh', (_entry, id) => service.refresh(id, true));
+  handle('set-month', async (_entry, month) => { model.monthRange(month); if (month > model.currentMonth() || month < '2020-01') throw new providers.ProviderError(`Choose a month from January 2020 through ${new Date(model.currentMonth() + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}.`, 'validation'); service.month = month; service.followCurrent = month === model.currentMonth(); _entry.month = month; _entry.followCurrent = service.followCurrent; service.emit(); service.refresh(); return service.snapshot(); });
+  handle('save-key', (_entry, id, key) => service.saveKey(id, key));
+  handle('set-target', async (_entry, id, target) => { if (!model.SOURCES.some(s => s.id === id) || (target !== null && (!model.finite(target) || target <= 0 || target > Number.MAX_SAFE_INTEGER))) throw new Error('Enter a positive monthly token or credit target.'); service.settings.targets[id] = target; await service.persist('settings.json', service.settings); service.emit(); return service.snapshot(); });
+  handle('choose-secrets', async (_entry) => {
     const result = await dialog.showOpenDialog(window, { title: 'Choose your secrets file', properties: ['openFile', 'showHiddenFiles'], defaultPath: path.join(os.homedir(), 'secrets.env') });
     if (!result.canceled && result.filePaths[0]) { service.settings.secretsPath = result.filePaths[0]; await service.persist('settings.json', service.settings); await service.refresh(null, true); }
     return service.snapshot();
   });
-  handle('open-provider', async (id, purpose) => { const source = model.SOURCES.find(s => s.id === id); if (!source) return; if (purpose === 'pricing') { if (['openai', 'anthropic'].includes(id)) await shell.openExternal(id === 'openai' ? 'https://developers.openai.com/api/docs/pricing' : 'https://platform.claude.com/docs/en/about-claude/pricing'); return; } await shell.openExternal(purpose === 'credentials' && source.credentialUrl ? source.credentialUrl : source.dashboard); });
-  handle('connect', id => service.refresh(id, true, true));
-  handle('demo', async enabled => { service.demo = !!enabled; service.emit(); if (!enabled) service.refresh(null, true); return service.snapshot(); });
+  handle('open-provider', async (_entry, id, purpose) => { const source = model.SOURCES.find(s => s.id === id); if (!source) return; if (purpose === 'pricing') { if (['openai', 'anthropic'].includes(id)) await shell.openExternal(id === 'openai' ? 'https://developers.openai.com/api/docs/pricing' : 'https://platform.claude.com/docs/en/about-claude/pricing'); return; } await shell.openExternal(purpose === 'credentials' && source.credentialUrl ? source.credentialUrl : source.dashboard); });
+  handle('connect', (_entry, id) => service.refresh(id, true, true));
+  handle('demo', async (_entry, enabled) => { service.demo = !!enabled; service.emit(); if (!enabled) service.refresh(null, true); return service.snapshot(); });
   const claudeLogin = createClaudeLogin({ spawn, ownChildren, environment: process.env, cwd: service.dir,
     onState: state => { service.claudeSignIn = state; service.emit(); },
     onSuccess: async () => { await service.inflight.get(`${service.month}:claude`); await service.refresh('claude', true, true); if (service.errors[`${service.month}:claude`]) throw new Error('Usage unavailable'); } });
-  handle('sign-in-claude', async () => {
+  handle('sign-in-claude', async (_entry) => {
     if (service.demo) return 'Leave sample data to sign in.';
     const paths = ['/opt/homebrew/bin/claude', path.join(os.homedir(), '.local/bin/claude')]; let binary;
     for (const p of paths) { try { await fs.access(p); binary = p; break; } catch {} }
     if (!binary) throw new providers.ProviderError('Install Claude Code, run claude auth login, then choose Connect.', 'setup');
     return claudeLogin.start(binary);
   });
-  window.on('focus', () => { void service.recheckClaude().catch(() => {}); });
   powerMonitor.on('resume', () => { void service.recheckClaude().catch(() => {}); });
-  handle('export', async () => {
+  handle('export', async (_entry) => {
     const r = await dialog.showSaveDialog(window, { title: 'Export usage snapshot', defaultPath: `Tokenlight-${service.month}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
     if (!r.canceled && r.filePath) { const snapshot = service.snapshot(), { cards, month, demo } = snapshot; await fs.writeFile(r.filePath, JSON.stringify({ month, demo, exportedAt: new Date().toISOString(), insights: insights.monthlyInsights(snapshot), sources: cards.map(({ scope, ...c }) => c) }, null, 2), { mode: 0o600 }); return 'Snapshot exported.'; }
     return null;
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { label: 'Tokenlight', submenu: [{ role: 'about' }, { type: 'separator' }, { label: 'Connections…', accelerator: 'CmdOrCtrl+,', click: () => window.webContents.send('show-connections') }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },
-    { role: 'editMenu' }, { label: 'View', submenu: [{ label: 'Refresh usage', accelerator: 'CmdOrCtrl+R', click: () => service.refresh(null, true) }, { id: 'mini-layout', label: 'Mini dashboard', accelerator: 'CmdOrCtrl+Shift+M', type: 'checkbox', checked: service.settings.layoutMode === 'mini', click: item => service.setLayoutMode(item.checked ? 'mini' : 'dashboard') }, { label: 'Appearance', submenu: MODES.map(mode => ({ id: `appearance-${mode}`, label: mode === 'auto' ? 'Auto — follow system' : mode === 'dark' ? 'Dark' : 'Light', type: 'radio', checked: service.settings.colorMode === mode, click: () => service.setColorMode(mode) })) }, { role: 'togglefullscreen' }] }, { role: 'windowMenu' }
+    { label: 'Tokenlight', submenu: [{ role: 'about' }, { type: 'separator' }, { id: 'connections', label: 'Connections…', accelerator: 'CmdOrCtrl+,', click: () => { const e = focused(); if (e && !e.dashboard) e.window.webContents.send('show-connections'); } }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },
+    { label: 'File', submenu: [{ label: 'New Dashboard Window', accelerator: 'CmdOrCtrl+Shift+N', click: () => { const e = focused(); if (e) void createWindow(e).catch(() => {}); } }, { role: 'close' }] },
+    { role: 'editMenu' }, { label: 'View', submenu: [
+      { id: 'refresh-usage', label: 'Refresh usage', accelerator: 'CmdOrCtrl+R', click: () => { const e = focused(); if (e && !e.dashboard) void service.refresh(null, true); } },
+      { id: 'mini-layout', label: 'Mini dashboard', accelerator: 'CmdOrCtrl+Shift+M', type: 'checkbox', checked: service.settings.layoutMode === 'mini', click: item => { const e = focused(); if (e && !e.dashboard) void service.setLayoutMode(item.checked ? 'mini' : 'dashboard'); } },
+      { id: 'appearance-menu', label: 'Appearance', submenu: MODES.map(mode => ({ id: `appearance-${mode}`, label: mode === 'auto' ? 'Auto — follow system' : mode === 'dark' ? 'Dark' : 'Light', type: 'radio', checked: service.settings.colorMode === mode, click: () => { const e = focused(); if (e && !e.dashboard) void service.setColorMode(mode); } })) }, { role: 'togglefullscreen' }] }, { role: 'windowMenu' }
   ]));
-  await window.loadFile(path.join(__dirname, 'index.html'));
-  window.show(); service.refresh();
-  const timer = setInterval(() => { if (service.followCurrent && service.month !== model.currentMonth()) { service.month = model.currentMonth(); service.emit(); } service.refresh(); }, 60000); timer.unref();
+  await createWindow();
+  updateMenu(); service.emit(); service.refresh();
+  app.on('activate', () => { if (!window || window.isDestroyed()) void createWindow().catch(() => {}); else window.show(); });
+  const timer = setInterval(() => {
+    const month = model.currentMonth();
+    if (service.followCurrent) service.month = month;
+    dashboards.rollover(month); service.emit();
+    for (const period of dashboards.months()) void service.refresh(null, false, false, period);
+  }, 60000); timer.unref();
   if (process.env.TOKENLIGHT_SCREENSHOT) {
     setTimeout(async () => { const image = await window.webContents.capturePage(); await fs.writeFile(process.env.TOKENLIGHT_SCREENSHOT, image.toPNG()); if (process.env.TOKENLIGHT_QUIT_AFTER_CAPTURE) app.quit(); }, service.demo ? 1200 : 18000);
   }

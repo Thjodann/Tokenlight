@@ -1,4 +1,5 @@
 import { insightsPage, financeDetails, cardCosts } from './insight-view.mjs';
+import { dashboardView, dashboardLayout } from './dashboard-view.mjs';
 import { DESKTOP_QUERY } from './desktop-view.mjs';
 import { wideView, WIDE_QUERY, instrumentLayout } from './wide-view.mjs';
 import { providerFor, providerLogo } from './provider-branding.mjs';
@@ -63,6 +64,13 @@ function card(c) {
   return `<article class="source-card source--${c.id} ${loading ? 'is-loading' : ''}" data-provider="${providerFor(c.id)}" aria-label="${c.title}">${header}<div class="metric-row"><div><div class="metric-value" title="${esc(fullCount(c.monthly))}">${number}${!monthly && unit ? `<small>${unit}</small>` : ''}</div><p class="metric-label">${label}</p></div>${pools.length ? '' : gauge(windowPercent, w?.label || 'Monthly target')}</div>${creditSection(c)}${cardCosts(c, snapshot)}${!c.creditBalances?.length && c.balanceSummary ? `<p class="balance-summary">${esc(c.balanceSummary)}</p>` : ""}${chart(c)}<div class="trend-label"><span>01 ${new Date(snapshot.month + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }).toUpperCase()}</span><span>${monthly ? 'DAILY ACTIVITY · UTC' : w ? 'REPORTED ALLOWANCE' : 'AWAITING MONTHLY REPORT'}</span></div>${pools.length ? allowancePools(pools) : w ? `<div class="window-row"><strong>${Math.round(w.percent)}% used</strong><span>· ${esc(w.label)}</span><span class="reset-label">${Number.isFinite(w.resetsAt) ? 'Resets ' + reset(w.resetsAt) : 'Reset not reported'}</span></div>` : c.monthlyTarget ? `<div class="window-row"><strong>${formatCount(c.monthlyTarget)} ${esc(c.unit)}</strong><span>monthly target</span></div>` : '<div class="window-row"><span>No monthly target set</span></div>'}<div class="card-footer"><span class="status-text"><i class="status-dot ${stale ? 'stale' : ''}"></i>${stale ? 'Last reading · offline or delayed' : loading ? 'Refreshing' : since(c.lastUpdatedAt)}</span>${c.partial ? '<span class="source-note">Partial history</span>' : `<span>${snapshot.demo ? 'Sample data' : 'Source connected'}</span>`}</div></article>`;
 }
 function fitInstruments() {
+  const display = document.querySelector('.display-rack');
+  if (display) {
+    const fit = dashboardLayout(display.clientWidth, display.clientHeight, display.children.length);
+    display.style.setProperty('--display-columns', fit.columns);
+    display.style.setProperty('--display-rows', fit.rows);
+    display.dataset.columns = fit.columns;
+  }
   const rack = document.querySelector('.instrument-rack');
   if (!rack || !rack.clientWidth || !rack.clientHeight) return;
   const fit = instrumentLayout(rack.clientWidth, rack.clientHeight, rack.children.length, wideQuery.matches);
@@ -73,6 +81,16 @@ function fitInstruments() {
 }
 function render() {
   if (!snapshot) return;
+  const display = !!snapshot.presentation?.dashboard;
+  document.body.dataset.dashboard = String(display);
+  if (display) {
+    for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
+    $('#version').textContent = snapshot.version;
+    document.title = `Tokenlight — ${view === 'account' ? 'Accounts' : view === 'api' ? 'API usage' : view === 'insights' ? 'Insights' : 'Overview'} · ${snapshot.month}`;
+    $('#main').innerHTML = dashboardView(snapshot, view);
+    fitInstruments();
+    return;
+  }
   currentMini = compactQuery.matches && !wideQuery.matches;
   const currentWide = !currentMini;
   document.body.dataset.wide = String(currentWide);
@@ -114,7 +132,7 @@ function renderConnections() {
   $('#demo-button').textContent = snapshot.demo ? 'Use live data' : 'Preview';
   $('#connection-list').innerHTML = snapshot.cards.map(c => `<div class="connection-row" data-provider="${providerFor(c.id)}"><span class="source-icon">${providerLogo(c.id)}</span><div class="connection-text"><strong>${c.title}</strong><p>${snapshot.demo ? 'Showing sample data' : c.error ? esc(c.error) : hasReading(c) ? `Connected · ${esc(c.sourceLabel)} · ${since(c.lastUpdatedAt)}` : 'Not connected yet'}</p></div><button class="button" data-action="details" data-id="${c.id}">${c.kind === 'api' ? 'Configure' : hasReading(c) ? 'Details' : 'Connect'}</button></div>`).join('');
 }
-function showConnections() { renderConnections(); $('#connections-dialog').showModal(); }
+function showConnections() { if (snapshot.presentation?.dashboard) return; renderConnections(); $('#connections-dialog').showModal(); }
 function showDetails(id) { selected = id; detailDirty = false; renderDetails(); $('#details-dialog').showModal(); }
 function renderDetails() {
   const c = snapshot.cards.find(c => c.id === selected); if (!c) return;
@@ -147,10 +165,12 @@ function renderDetails() {
   $('#target-form')?.addEventListener('submit', async e => { e.preventDefault(); const v = $('#monthly-target').value; detailDirty = false; const result = await run(() => api.target(c.id, v ? Number(v) : null)); if (!result) return; renderDetails(); $('#target-form button').focus(); notify(v ? 'Monthly target saved.' : 'Monthly target removed.'); });
   $('#details-content').addEventListener('input', () => { detailDirty = true; }, { once: true });
 }
-function update(value) { if (value?.cards) { const signInChanged = snapshot?.claudeSignIn?.message !== value.claudeSignIn?.message; snapshot = value; document.documentElement.dataset.theme = value.appearance?.dark ? 'dark' : 'light'; $('#appearance-mode').value = value.settings.colorMode || 'auto'; render(); if (signInChanged && selected === 'claude' && $('#details-dialog').open && !detailDirty) renderDetails(); } }
+function update(value) { if (value?.cards) { if (value.presentation?.dashboard) view = value.presentation.view; const signInChanged = snapshot?.claudeSignIn?.message !== value.claudeSignIn?.message; snapshot = value; document.documentElement.dataset.theme = value.appearance?.dark ? 'dark' : 'light'; $('#appearance-mode').value = value.settings.colorMode || 'auto'; render(); if (signInChanged && selected === 'claude' && $('#details-dialog').open && !detailDirty) renderDetails(); } }
 function notify(message, error = false) { const toast = $('#toast'), modal = [...document.querySelectorAll('dialog[open]')].at(-1); clearTimeout(toastTimer); (modal || document.body).append(toast); toast.classList.toggle('in-dialog', !!modal); toast.textContent = message; toast.hidden = false; toast.classList.toggle('error', error); toastTimer = setTimeout(() => { toast.hidden = true; }, error ? 6500 : 4000); }
 async function run(fn) { try { const value = await fn(); if (value?.cards) update(value); else if (typeof value === 'string') notify(value); return value; } catch (e) { notify(e.message || 'The action could not finish.', true); return null; } }
 async function action(name, id) {
+  if (snapshot.presentation?.dashboard) return;
+  if (name === 'new-dashboard') { await run(() => api.viewState(view)); return run(() => api.newDashboard()); }
   if (name === 'details') return showDetails(id);
   if (name === 'connections') return showConnections();
   if (name === 'dashboard' || name === 'credentials' || name === 'pricing') return run(() => api.openProvider(id, name));
@@ -161,7 +181,7 @@ async function action(name, id) {
   if (name === 'live') return run(() => api.demo(false));
   if (['previous', 'next'].includes(name)) { const d = new Date(snapshot.month + '-01T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + (name === 'previous' ? -1 : 1)); return run(() => api.month(d.toISOString().slice(0, 7))); }
 }
-document.addEventListener('click', e => { const close = e.target.closest('[data-close]'); if (close) return $('#' + close.dataset.close).close(); const button = e.target.closest('[data-action]'); if (button) action(button.dataset.action, button.dataset.id); const nav = e.target.closest('[data-view]'); if (nav) { view = nav.dataset.view; render(); } });
+document.addEventListener('click', e => { if (snapshot?.presentation?.dashboard) return; const close = e.target.closest('[data-close]'); if (close) return $('#' + close.dataset.close).close(); const button = e.target.closest('[data-action]'); if (button) action(button.dataset.action, button.dataset.id); const nav = e.target.closest('[data-view]'); if (nav) { view = nav.dataset.view; void api.viewState(view).catch(() => {}); render(); } });
 compactQuery.addEventListener('change', () => render());
 wideQuery.addEventListener('change', () => render());
 desktopQuery.addEventListener('change', () => render());

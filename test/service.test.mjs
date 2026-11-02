@@ -133,3 +133,16 @@ test('an expired Claude token makes a recently cached reading due for a new chec
   service.cache['2026-10:claude'] = { monthly: 10, lastUpdatedAt: Date.now(), sessionExpiresAt: Date.now() - 1000 };
   await service.refresh('claude'); assert.equal(calls, 1); assert.equal(service.snapshot().cards[0].monthly, 43);
 });
+
+test('independent dashboard periods share in-flight reads without moving the main month', async () => {
+  const calls = []; let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const service = createService({ loadCredentials: async () => ({ openai: 'fixture-key' }), readProvider: async (_id, month) => { calls.push(month); await gate; return { monthly: month === '2026-09' ? 111 : 222, scope: cachePolicy.fingerprint('fixture-key') }; } });
+  service.emit = () => {};
+  const reads = [service.refresh(null, true, false, '2026-09'), service.refresh(null, true, false, '2026-09'), service.refresh(null, true, false, '2026-10')];
+  await new Promise(resolve => setImmediate(resolve)); release(); await Promise.all(reads);
+  assert.deepEqual(calls.sort(), ['2026-09', '2026-10']);
+  assert.equal(service.month, '2026-10');
+  assert.equal(service.snapshot('2026-09').cards[0].monthly, 111);
+  assert.equal(service.snapshot().cards[0].monthly, 222);
+});
