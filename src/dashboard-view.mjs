@@ -11,6 +11,7 @@ const percent = n => new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }
 
 export function dashboardLayout(width, height, count) {
   if (!count || width <= 0 || height <= 0) return { columns: 1, rows: 1 };
+  if (width <= 700 && height / count >= 72) return { columns: 1, rows: count };
   let best;
   for (let columns = 1; columns <= Math.min(count, Math.max(1, Math.floor(width / 190))); columns++) {
     const rows = Math.ceil(count / columns), w = (width - (columns - 1) * 10) / columns, h = (height - (rows - 1) * 10) / rows;
@@ -38,7 +39,7 @@ export function dashboardView(snapshot, view = 'overview') {
     ['Most used', i.mostUsed?.title || 'Unreported', 'Approximate activity ranking'],
     ['Favorite model', i.favorite?.model || 'Unreported', 'Most frequent in available records'],
     ['Longest-running', i.oldest?.title || 'Unreported', i.oldest ? `${i.oldest.age.years.toFixed(1)} years · entered locally` : 'Account start dates not set']
-  ].map(([label, value, note]) => `<div class="display-stat"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></div>`).join('');
+  ].map(([label, value, note]) => `<div class="display-stat" title="${esc(label + ': ' + value + ' · ' + note)}"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></div>`).join('');
   const panels = cards.map(c => {
     const credit = miniCredit(c), cost = sourceCost(c, snapshot.settings, snapshot.month);
     const pools = (c.windows || []).filter(w => finite(w.percent) && (!w.resetsAt || w.resetsAt > Date.now()));

@@ -36,3 +36,10 @@ test('instrument grid fits every source at common and extreme sizes', () => {
     }
   }
 });
+test('a tall sidebar keeps one instrument per row to retain room for each source metric', () => {
+  for (const width of [248, 308, 508, 688]) for (const count of [3, 4, 7]) {
+    const fit = dashboardLayout(width, 900, count);
+    assert.equal(fit.columns, 1);
+    assert.equal(fit.rows, count);
+  }
+});
