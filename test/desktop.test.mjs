@@ -9,7 +9,7 @@ test('desktop and wide layouts expose an exhausted paid cap with or without a se
     const s={...snapshot,cards:[{...snapshot.cards[1],creditBalances,paidUsage:{capReached:true,used:21.31,limit:20,unit:'USD'}}]};
     for (const desktop of [true,false]) {
       const html=wideView(s,'overview',{desktop});
-      assert.match(html,/>Cap reached</);
+      assert.match(html,/Cap reached/);
       assert.match(html,/paid usage unavailable/);
       assert.match(html,/\$21.31 used of \$20.00/);
     }
@@ -21,7 +21,7 @@ test('desktop ledger preserves seven sources, filters and source details without
     assert.equal((html.match(/class="desk-source-row"/g)||[]).length,count);
     assert.doesNotMatch(html,/class="wide-instrument"/);
     assert.doesNotMatch(html,/style="/);
-    assert.match(html,/Current allowances/);assert.match(html,/Current credits/);
+    assert.match(html,/Allowances · current/);assert.match(html,/Balances · current/);
     assert.match(html,/not an extra charge/);assert.match(html,/before credits \/ tax/);
   }
   assert.match(wideView(snapshot,'overview'),/class="wide-instrument"/);

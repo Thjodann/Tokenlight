@@ -5,12 +5,12 @@ import { SOURCES } from '../src/model.mjs';
 import { demoCards } from '../src/fixtures.mjs';
 import { MARKS, providerFor, providerLogo } from '../src/provider-branding.mjs';
 import { miniReading, miniCredit, miniView } from '../src/mini-view.mjs';
-test('mini credit summary prioritizes a reached paid cap without discarding a separate allowance', () => {
+test('mini balance stays a balance even when the paid cap is reached', () => {
   const card = { paidUsage: { capReached: true, used: 21.31, limit: 20, unit: 'USD' }, creditBalances: [{ label: 'Fable allowance remaining', value: 198.38, unit: 'USD', allowance: true }] };
-  assert.equal(miniCredit(card).text, 'Cap reached');
-  assert.match(miniCredit(card).title, /\$21.31/);
+  assert.equal(miniCredit(card).text, '$198.38');
+  assert.doesNotMatch(miniCredit(card).title, /Cap reached|\$21.31/);
   assert.match(miniCredit(card).title, /\$198.38/);
-  assert.match(miniCredit(card).title, /separate/);
+  assert.match(miniCredit(card).title, /allowance value, not a charge/);
 });
 import layout from '../src/layout.cjs';
 
@@ -34,15 +34,15 @@ test('all seven sources share five original, self-contained provider marks', () 
 test('mini metrics retain zero, units, incomplete history and unknown values', () => {
   assert.equal(miniReading({ monthly: 0, unit: 'tokens' }), '0 tok');
   assert.equal(miniReading({ monthly: 0, unit: 'credits', partial: true }), '~0 cr');
-  assert.equal(miniReading({ monthly: null }), '—');
-  assert.equal(miniReading({ monthly: null, status: 'setup' }), 'Connect');
-  assert.equal(miniReading({ monthly: null, windows: [{ percent: 100, resetsAt: Date.now() + 999999 }] }), '100% used');
-  assert.equal(miniReading({ monthly: null, windows: [{ percent: 100, resetsAt: Date.now() - 1 }] }), '—');
+  assert.equal(miniReading({ monthly: null }), 'Not reported');
+  assert.equal(miniReading({ monthly: null, status: 'setup' }), 'Not reported');
+  assert.equal(miniReading({ monthly: null, windows: [{ percent: 100, resetsAt: Date.now() + 999999 }] }), 'Not reported');
+  assert.equal(miniReading({ monthly: null, windows: [{ percent: 100, resetsAt: Date.now() - 1 }] }), 'Not reported');
   assert.equal(miniCredit({ creditBalances: [{ label: 'Available credits', value: 0, unit: 'credits' }] }).text, '0 cr');
   assert.equal(miniCredit({ paidUsage: { limit: 100, used: 2, unit: 'USD' } }).text, '—');
-  assert.equal(miniCredit({ creditBalances: [{ label: 'Fable allowance remaining', value: 242.83, unit: 'USD', allowance: true }] }).text, 'F $242.83');
-  assert.equal(miniCredit({ apiCost: { total: 0, unit: 'USD' } }).text, '$0.00 cost');
-  assert.match(miniCredit({ apiCost: { total: 18.35, unit: 'USD' } }).title, /\$18.35.*before credits/);
+  assert.equal(miniCredit({ creditBalances: [{ label: 'Fable allowance remaining', value: 242.83, unit: 'USD', allowance: true }] }).text, '$242.83');
+  assert.equal(miniCredit({ apiCost: { total: 0, unit: 'USD' } }).text, '—');
+  assert.doesNotMatch(miniCredit({ apiCost: { total: 18.35, unit: 'USD' } }).title, /18.35/);
 });
 
 test('mini rows keep every source actionable, named and labeled as sample, partial or stale', () => {

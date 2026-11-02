@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import * as model from '../src/model.mjs';
+import * as metricView from '../src/metric-view.mjs';
 import { cardCosts } from '../src/insight-view.mjs';
 import { creditSection } from '../src/credit-view.mjs';
 import { providerFor, providerLogo } from '../src/provider-branding.mjs';
@@ -16,12 +17,12 @@ test('Codex history from another month never creates a selected-month zero', () 
 
 test('successful empty Anthropic reading remains connected without inventing zero or demanding setup', async () => {
   const source = await readFile(new URL('../src/renderer.mjs', import.meta.url), 'utf8');
-  const context = vm.createContext({ ...model, creditSection, cardCosts, providerFor, providerLogo, window: { tokenlight: {} }, Date, Intl });
+  const context = vm.createContext({ ...model, ...metricView, creditSection, cardCosts, providerFor, providerLogo, window: { tokenlight: {} }, Date, Intl });
   vm.runInContext(source.slice(source.indexOf('const $'), source.indexOf('function render()')) + `
  globalThis.inspectCard = c => { snapshot = { month: '2026-11', demo: false }; return { connected: hasReading(c), html: card(c) }; };`, context);
   const card = context.inspectCard({ ...model.SOURCES.find(s => s.id === 'anthropic'), monthly: null, windows: [], daily: [], status: 'ready', lastUpdatedAt: Date.now() });
   assert.equal(card.connected, true);
   assert.doesNotMatch(card.html, /A little setup needed|Set up usage access/);
-  assert.match(card.html, /Monthly usage not reported/);
-  assert.match(card.html, /metric-value[^>]*>—/);
+  assert.match(card.html, /Activity · Nov · tokens/);
+  assert.match(card.html, /metric-value[^>]*>Not reported/);
 });

@@ -10,7 +10,7 @@ test('all four display views are passive and preserve their source filter', () =
     assert.doesNotMatch(html, /<(button|input|select|a|form)\b|data-action=|tabindex=/);
     assert.match(html, /SAMPLE DATA/); assert.match(html, /November 2026/);
     assert.match(html, /not an extra charge/);
-    if (view === 'insights') assert.match(html, /Known monthly cost · USD/);
+    assert.match(html, /Activity · selected month/);
   }
 });
 test('display readings keep zero, missing, stale, credit cap and separate allowance semantics', () => {
@@ -19,8 +19,8 @@ test('display readings keep zero, missing, stale, credit cap and separate allowa
   const claude = s.cards.find(c => c.id === 'claude'); claude.paidUsage = { capReached: true, used: 21.31, limit: 20, unit: 'USD' };
   const html = dashboardView(s);
   assert.match(html, /0 tok/); assert.match(html, /Stale reading/);
-  assert.match(html, /Cap reached/); assert.match(html, /Paid usage unavailable/);
-  assert.match(html, /separate reported allowance/); assert.match(html, /~7\.47M tok/);
+  assert.match(html, /Cap reached/); assert.match(html, /paid usage unavailable/);
+  assert.match(html, /Fable allowance remaining/); assert.match(html, /allowance value, not a charge/); assert.match(html, /~7\.47M tok/);
   assert.match(html, /Grok \/ Composer/); assert.match(html, /Third-party models/);
 });
 test('provider strings are escaped in passive display markup', () => {

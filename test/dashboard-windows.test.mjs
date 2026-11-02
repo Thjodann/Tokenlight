@@ -53,7 +53,7 @@ test('broadcast selects each period and redacts connection configuration from di
 test('main bootstrap keeps kiosk IPC read-only and display windows alive after main closes', async () => {
   const { readFile } = await import('node:fs/promises');
   const vm = await import('node:vm');
-  const model = await import('../src/model.mjs'), fixture = await import('../src/fixtures.mjs'), insights = await import('../src/insights.mjs');
+  const model = await import('../src/model.mjs'), demoData = await import('../src/demo-data.mjs'), insights = await import('../src/insights.mjs');
   const require = createRequire(new URL('../src/main.cjs', import.meta.url));
   const app = new EventEmitter(), windows = [], handlers = new Map(); let focused, menu, boot, timer;
   Object.assign(app, { requestSingleInstanceLock: () => true, getVersion: () => 'test', getPath: () => '/fixture', setAccessibilitySupportEnabled() {}, quit() { this.didQuit = true; }, whenReady: () => ({ then(fn) { boot = fn(); } }) });
@@ -72,8 +72,8 @@ test('main bootstrap keeps kiosk IPC read-only and display windows alive after m
   const fakeFS = { mkdir: async () => {}, access: async () => { throw new Error('Absent'); }, readFile: async () => { throw new Error('Absent'); } };
   class ProviderError extends Error {}
   let source = await readFile(new URL('../src/main.cjs', import.meta.url), 'utf8');
-  source = source.replace("Promise.all([import('./model.mjs'), import('./providers.mjs'), import('./fixtures.mjs'), import('./insights.mjs')])", 'Promise.resolve(__modules)');
-  vm.runInNewContext(source, { require: id => id === 'electron' ? electron : id === 'node:fs/promises' ? fakeFS : require(id), __modules: [model, { ProviderError }, fixture, insights], process: { env: {}, argv: ['--demo'] }, __dirname: '/fixture/src', setInterval: fn => { timer = fn; return { unref() {} }; } });
+  source = source.replace("Promise.all([import('./model.mjs'), import('./providers.mjs'), import('./insights.mjs'), import('./demo-data.mjs')])", 'Promise.resolve(__modules)');
+  vm.runInNewContext(source, { require: id => id === 'electron' ? electron : id === 'node:fs/promises' ? fakeFS : require(id), __modules: [model, { ProviderError }, insights, demoData], process: { env: {}, argv: ['--demo'] }, __dirname: '/fixture/src', setInterval: fn => { timer = fn; return { unref() {} }; } });
   await boot;
   const main = windows[0], call = (w, channel, ...args) => handlers.get(channel)(event(w), ...args);
   assert.equal((await call(main, 'get-snapshot')).value.presentation.dashboard, false);

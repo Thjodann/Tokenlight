@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell, Menu, safeStorage, nativeThe
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const os = require('node:os');
+const { randomUUID } = require('node:crypto');
 const { spawn } = require('node:child_process');
 const { MODES, normalizeColorMode, backgroundColor, applyColorMode } = require('./appearance.cjs');
 const { LAYOUTS, MINIMUM, normalizeLayout, initialSize, LayoutController } = require('./layout.cjs');
@@ -13,19 +14,20 @@ const { createClaudeLogin } = require('./claude-login.cjs');
 if (process.env.TOKENLIGHT_PROFILE && path.isAbsolute(process.env.TOKENLIGHT_PROFILE)) app.setPath('userData', process.env.TOKENLIGHT_PROFILE);
 const single = app.requestSingleInstanceLock();
 if (!single) app.quit();
-let window, model, providers, fixture, service, layoutController, insights;
+let window, model, providers, service, layoutController, insights, demoData;
 const ownChildren = new Set();
 app.on('second-instance', () => { if (window && !window.isDestroyed()) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } else if (service) app.emit('activate'); });
 app.on('before-quit', () => { for (const child of ownChildren) child.kill('SIGTERM'); });
 const safeError = e => e instanceof providers.ProviderError ? e.message : 'Something interrupted this reading. Try again.';
 
 class Service {
-  constructor() { this.demo = process.argv.includes('--demo') || process.env.TOKENLIGHT_DEMO === '1'; this.demoAt = Date.now(); this.month = model.currentMonth(); this.followCurrent = true; this.cache = {}; this.errors = {}; this.credentialScopes = {}; this.credentialEpochs = {}; this.busy = new Set(); this.inflight = new Map(); this.fileError = null; this.vault = {}; this.writeQueue = Promise.resolve(); }
+  constructor() { this.demo = process.argv.includes('--demo') || process.env.TOKENLIGHT_DEMO === '1'; this.demoAt = Date.now(); this.demoSeed = randomUUID(); this.modeEpoch = 0; this.month = model.currentMonth(); this.followCurrent = true; this.cache = {}; this.errors = {}; this.credentialScopes = {}; this.credentialEpochs = {}; this.busy = new Set(); this.inflight = new Map(); this.fileError = null; this.vault = {}; this.writeQueue = Promise.resolve(); }
   async init() {
     this.dir = app.getPath('userData'); await fs.mkdir(this.dir, { recursive: true });
     const candidate = path.join(os.homedir(), 'secrets.env');
     let defaultPath = null; try { await fs.access(candidate); defaultPath = candidate; } catch {}
     this.settings = { secretsPath: defaultPath, targets: {}, refreshMinutes: 5, keychainAllowed: {}, colorMode: 'auto', ...await this.read('settings.json', {}) };
+    this.demo ||= this.settings.demoMode === true;
     this.settings.colorMode = normalizeColorMode(this.settings.colorMode);
     this.settings.layoutMode = normalizeLayout(this.settings.layoutMode);
     this.cache = await this.read('usage-cache.json', {});
@@ -41,17 +43,19 @@ class Service {
     return this.writeQueue;
   }
   snapshot(month = this.month) {
-    const cards = this.demo ? fixture.demoCards(month, this.demoAt).map(c => ({ ...c, monthlyTarget: this.settings.targets[c.id] || null })) : model.SOURCES.map(source => {
+    const sample = this.demo ? demoData.createDemoData(month, this.demoAt, this.demoSeed) : null;
+    const cards = sample ? sample.cards : model.SOURCES.map(source => {
       const key = `${month}:${source.id}`, cached = this.cache[key], error = this.errors[key];
       const showCache = cached && cacheAllowed(source.id, cached, this.credentialScopes) && !['setup', 'auth', 'file'].includes(error?.code);
       return { ...source, ...(showCache ? cached : {}), status: this.busy.has(key) ? 'refreshing' : error ? showCache ? 'stale' : 'setup' : showCache ? 'ready' : 'unconnected', error: error?.message || null, errorCode: error?.code, retryAt: error?.retryAt,
         monthlyTarget: this.settings.targets[source.id] || null };
     });
-    return { month, demo: this.demo, cards, version: app.getVersion(), updatedAt: Date.now(), fileError: this.fileError, vaultError: this.vaultError,
-      claudeSignIn: this.claudeSignIn || null, appearance: { dark: nativeTheme.shouldUseDarkColors },
-      settings: { secretsPath: this.settings.secretsPath, refreshMinutes: this.settings.refreshMinutes, colorMode: this.settings.colorMode, layoutMode: this.settings.layoutMode, accountProfiles: this.settings.accountProfiles || {}, targets: this.settings.targets, savedKeys: Object.keys(this.vault) } };
+    return { month, demo: this.demo, cards, version: app.getVersion(), updatedAt: Date.now(), fileError: this.demo ? null : this.fileError, vaultError: this.demo ? null : this.vaultError,
+      claudeSignIn: this.demo ? null : this.claudeSignIn || null, appearance: { dark: nativeTheme.shouldUseDarkColors },
+      settings: sample ? demoData.demoSettings(this.settings, sample) : { secretsPath: this.settings.secretsPath, refreshMinutes: this.settings.refreshMinutes, colorMode: this.settings.colorMode, layoutMode: this.settings.layoutMode, accountProfiles: this.settings.accountProfiles || {}, targets: this.settings.targets, savedKeys: Object.keys(this.vault) } };
   }
   async setAccountProfile(id, value) {
+    this.requireLive();
     if (!model.SOURCES.some(s => s.id === id)) throw new Error('Unknown source.');
     this.profileWrites = (this.profileWrites || Promise.resolve()).catch(() => {}).then(async () => {
       const previous = this.settings.accountProfiles;
@@ -63,6 +67,27 @@ class Service {
       this.emit(); return this.snapshot();
     });
     return this.profileWrites;
+  }
+  requireLive() { if (this.demo) throw new Error('Turn off Demo mode before changing a live connection or account setting.'); }
+  randomizeDemo() { this.demoAt = Date.now(); this.demoSeed = randomUUID(); }
+  async setDemoMode(enabled) {
+    if (typeof enabled !== 'boolean') throw new Error('Choose whether Demo mode is on or off.');
+    this.demoWrites = (this.demoWrites || Promise.resolve()).catch(() => {}).then(async () => {
+      const previous = this.demo;
+      if (enabled) { this.demo = true; this.randomizeDemo(); this.modeEpoch++; this.inflight.clear(); this.busy.clear(); this.emit(); }
+      this.settings.demoMode = enabled;
+      try { await this.persist('settings.json', this.settings); }
+      catch (error) {
+        if (!enabled) this.settings.demoMode = previous;
+        this.emit();
+        throw new Error(enabled ? 'Demo mode is active for this session, but could not be saved for next launch.' : 'Demo mode is still on because the change could not be saved.');
+      }
+      if (!enabled) { this.demo = false; this.modeEpoch++; this.inflight.clear(); this.busy.clear(); }
+      this.emit();
+      if (!enabled) void this.refresh(null, true).catch(() => {});
+      return this.snapshot();
+    });
+    return this.demoWrites;
   }
   async setLayoutMode(mode) {
     if (!LAYOUTS.includes(mode)) throw new Error('Choose Dashboard or Mini.');
@@ -88,11 +113,12 @@ class Service {
   }
   emit() { dashboards.broadcast(month => this.snapshot(month)); }
   async refresh(id = null, manual = false, allowKeychain = false, month = this.month) {
-    if (this.demo) { this.emit(); return this.snapshot(); }
+    if (this.demo) { if (manual) this.randomizeDemo(); this.emit(); return this.snapshot(month); }
+    const modeEpoch = this.modeEpoch, live = () => !this.demo && this.modeEpoch === modeEpoch;
     const ids = id ? [id] : model.SOURCES.map(s => s.id);
     let credentials;
-    try { credentials = await providers.loadCredentials(this.settings.secretsPath, this.vault); this.fileError = null; }
-    catch (e) { this.fileError = safeError(e); credentials = { ...this.vault }; }
+    try { credentials = await providers.loadCredentials(this.settings.secretsPath, this.vault); if (!live()) return this.snapshot(month); this.fileError = null; }
+    catch (e) { if (!live()) return this.snapshot(month); this.fileError = safeError(e); credentials = { ...this.vault }; }
     const reconciliation = reconcileCredentials(this.cache, this.errors, this.credentialScopes, credentials);
     for (const changedId of reconciliation.changed) {
       this.credentialEpochs[changedId] = (this.credentialEpochs[changedId] || 0) + 1;
@@ -101,13 +127,13 @@ class Service {
     if (reconciliation.removed) await this.persist('usage-cache.json', this.cache);
     this.emit();
     await Promise.allSettled(ids.map(async sourceId => {
-      if (!model.SOURCES.some(s => s.id === sourceId)) return;
+      if (!live() || !model.SOURCES.some(s => s.id === sourceId)) return;
       const key = `${month}:${sourceId}`;
       if (this.inflight.has(key)) return this.inflight.get(key);
       if (!manual && this.errors[key]?.retryAt > Date.now()) return;
       if (!manual && !(sourceId === 'claude' && this.cache[key]?.sessionExpiresAt && this.cache[key].sessionExpiresAt <= Date.now()) && this.cache[key] && Date.now() - this.cache[key].lastUpdatedAt < (sourceId === 'cursor' ? 900000 : this.settings.refreshMinutes * 60000)) return;
       const epoch = this.credentialEpochs[sourceId];
-      const current = () => this.credentialEpochs[sourceId] === epoch;
+      const current = () => live() && this.credentialEpochs[sourceId] === epoch;
       const task = (async () => {
         this.busy.add(key); this.emit();
         try {
@@ -134,6 +160,7 @@ class Service {
     return this.refresh('claude', true);
   }
   async saveKey(id, key) {
+    this.requireLive();
     if (!['openai', 'anthropic', 'elevenlabs', 'ollama'].includes(id)) throw new Error('Unknown provider.');
     if (typeof key !== 'string' || key.length < 12 || key.length > 10000 || /\s/.test(key)) throw new Error('Enter a valid API key without spaces.');
     if (!await safeStorage.isAsyncEncryptionAvailable()) throw new Error('macOS secure storage is unavailable. Your key was not saved.');
@@ -147,7 +174,7 @@ class Service {
 
 app.whenReady().then(async () => {
   app.setAccessibilitySupportEnabled(true);
-  [model, providers, fixture, insights] = await Promise.all([import('./model.mjs'), import('./providers.mjs'), import('./fixtures.mjs'), import('./insights.mjs')]);
+  [model, providers, insights, demoData] = await Promise.all([import('./model.mjs'), import('./providers.mjs'), import('./insights.mjs'), import('./demo-data.mjs')]);
   service = new Service(); await service.init();
   applyColorMode(service.settings.colorMode, nativeTheme);
   const focused = () => dashboards.entries.get(BrowserWindow.getFocusedWindow()?.webContents);
@@ -178,7 +205,7 @@ app.whenReady().then(async () => {
       const entry = dashboards.authorize(event, readOnly);
       const value = channel === 'get-snapshot' ? service.snapshot(entry.month) : await fn(entry, ...args);
       return { ok: true, value: value?.cards ? dashboards.snapshot(entry, value) : value };
-    } catch (e) { return { ok: false, error: e instanceof providers.ProviderError || ['save-key', 'set-target', 'set-account-profile', 'get-snapshot'].includes(channel) ? e.message : 'The action could not finish. Please try again.' }; }
+    } catch (e) { return { ok: false, error: e instanceof providers.ProviderError || ['save-key', 'set-target', 'set-account-profile', 'get-snapshot', 'demo'].includes(channel) ? e.message : 'The action could not finish. Please try again.' }; }
   });
   handle('get-snapshot', null, true);
   handle('set-window-view', (entry, view) => { dashboards.setView(entry, view); });
@@ -190,15 +217,16 @@ app.whenReady().then(async () => {
   handle('refresh', (_entry, id) => service.refresh(id, true));
   handle('set-month', async (_entry, month) => { model.monthRange(month); if (month > model.currentMonth() || month < '2020-01') throw new providers.ProviderError(`Choose a month from January 2020 through ${new Date(model.currentMonth() + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}.`, 'validation'); service.month = month; service.followCurrent = month === model.currentMonth(); _entry.month = month; _entry.followCurrent = service.followCurrent; service.emit(); service.refresh(); return service.snapshot(); });
   handle('save-key', (_entry, id, key) => service.saveKey(id, key));
-  handle('set-target', async (_entry, id, target) => { if (!model.SOURCES.some(s => s.id === id) || (target !== null && (!model.finite(target) || target <= 0 || target > Number.MAX_SAFE_INTEGER))) throw new Error('Enter a positive monthly token or credit target.'); service.settings.targets[id] = target; await service.persist('settings.json', service.settings); service.emit(); return service.snapshot(); });
+  handle('set-target', async (_entry, id, target) => { service.requireLive(); if (!model.SOURCES.some(s => s.id === id) || (target !== null && (!model.finite(target) || target <= 0 || target > Number.MAX_SAFE_INTEGER))) throw new Error('Enter a positive monthly token or credit target.'); service.settings.targets[id] = target; await service.persist('settings.json', service.settings); service.emit(); return service.snapshot(); });
   handle('choose-secrets', async (_entry) => {
+    service.requireLive();
     const result = await dialog.showOpenDialog(window, { title: 'Choose your secrets file', properties: ['openFile', 'showHiddenFiles'], defaultPath: path.join(os.homedir(), 'secrets.env') });
     if (!result.canceled && result.filePaths[0]) { service.settings.secretsPath = result.filePaths[0]; await service.persist('settings.json', service.settings); await service.refresh(null, true); }
     return service.snapshot();
   });
   handle('open-provider', async (_entry, id, purpose) => { const source = model.SOURCES.find(s => s.id === id); if (!source) return; if (purpose === 'pricing') { if (['openai', 'anthropic'].includes(id)) await shell.openExternal(id === 'openai' ? 'https://developers.openai.com/api/docs/pricing' : 'https://platform.claude.com/docs/en/about-claude/pricing'); return; } await shell.openExternal(purpose === 'credentials' && source.credentialUrl ? source.credentialUrl : source.dashboard); });
   handle('connect', (_entry, id) => service.refresh(id, true, true));
-  handle('demo', async (_entry, enabled) => { service.demo = !!enabled; service.emit(); if (!enabled) service.refresh(null, true); return service.snapshot(); });
+  handle('demo', (_entry, enabled) => service.setDemoMode(enabled));
   const claudeLogin = createClaudeLogin({ spawn, ownChildren, environment: process.env, cwd: service.dir,
     onState: state => { service.claudeSignIn = state; service.emit(); },
     onSuccess: async () => { await service.inflight.get(`${service.month}:claude`); await service.refresh('claude', true, true); if (service.errors[`${service.month}:claude`]) throw new Error('Usage unavailable'); } });
@@ -211,8 +239,9 @@ app.whenReady().then(async () => {
   });
   powerMonitor.on('resume', () => { void service.recheckClaude().catch(() => {}); });
   handle('export', async (_entry) => {
-    const r = await dialog.showSaveDialog(window, { title: 'Export usage snapshot', defaultPath: `Tokenlight-${service.month}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
-    if (!r.canceled && r.filePath) { const snapshot = service.snapshot(), { cards, month, demo } = snapshot; await fs.writeFile(r.filePath, JSON.stringify({ month, demo, exportedAt: new Date().toISOString(), insights: insights.monthlyInsights(snapshot), sources: cards.map(({ scope, ...c }) => c) }, null, 2), { mode: 0o600 }); return 'Snapshot exported.'; }
+    const snapshot = service.snapshot();
+    const r = await dialog.showSaveDialog(window, { title: 'Export usage snapshot', defaultPath: `Tokenlight-${snapshot.demo ? 'demo-' : ''}${snapshot.month}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
+    if (!r.canceled && r.filePath) { const { cards, month, demo } = snapshot; await fs.writeFile(r.filePath, JSON.stringify({ month, demo, exportedAt: new Date().toISOString(), insights: insights.monthlyInsights(snapshot), sources: cards.map(({ scope, ...c }) => c) }, null, 2), { mode: 0o600 }); return 'Snapshot exported.'; }
     return null;
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate([

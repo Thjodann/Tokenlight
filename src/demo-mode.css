@@ -1,0 +1,5 @@
+.screenshot-demo{margin:0 0 12px;padding:14px;border:1px solid var(--line-strong);background:var(--raised);border-radius:4px}
+.screenshot-demo p{line-height:1.5}
+.demo-switch{min-width:52px;flex:none}
+.demo-switch[aria-checked=true]{background:var(--accent);border-color:var(--accent);color:var(--bg);font-weight:650}
+#demo-randomize{margin-bottom:16px}

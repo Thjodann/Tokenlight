@@ -5,6 +5,7 @@ import { wideView, WIDE_QUERY, instrumentLayout } from './wide-view.mjs';
 import { providerFor, providerLogo } from './provider-branding.mjs';
 import { miniView, MINI_QUERY } from './mini-view.mjs';
 import { creditSection } from './credit-view.mjs';
+import { activityReading, activityCaption, allowanceMarkup, balanceMarkup } from './metric-view.mjs';
 import { brandMark } from './brand.mjs';
 import { SOURCES, currentMonth, formatCount, finite, resetCountdown } from './model.mjs';
 const compactQuery = window.matchMedia(MINI_QUERY);
@@ -49,27 +50,31 @@ function chart(c) {
   return `<div class="trend"><svg viewBox="0 0 240 50" preserveAspectRatio="none" role="img" aria-label="Daily reported ${esc(c.unit || 'token')} usage for ${esc(monthName(snapshot.month))}; gaps mean no reported reading"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="currentColor" stop-opacity=".13"/><stop offset="100%" stop-color="currentColor" stop-opacity=".015"/></linearGradient></defs><path class="chart-grid" d="M0 47H240M0 23H240"/>${marks}</svg></div>`;
 }
 function card(c) {
-  const pools = ['cursor', 'claude'].includes(c.id) ? (c.windows || []).filter(w => (c.id === 'claude' || w.pool) && finite(w.percent)) : [];
-  const reading = hasReading(c), loading = c.status === 'refreshing', stale = c.status === 'stale', w = pools.length ? null : activeWindow(c);
-  const windowPercent = w?.percent ?? (c.monthlyTarget && finite(c.monthly) ? c.monthly / c.monthlyTarget * 100 : null);
+  const reading = hasReading(c), loading = c.status === 'refreshing', stale = c.status === 'stale';
   const plan = c.plan ? String(c.plan).replace(/^promax$/i, 'Pro Max').replace(/^ultra$/i, 'Ultra').replace(/^max$/i, 'Max').replace(/^pro$/i, 'Pro') : null;
   const header = `<div class="card-top"><span class="source-icon" aria-hidden="true">${providerLogo(c.id)}</span><div><h3 class="source-name">${c.title}</h3><p class="source-meta">${c.organization} · ${c.kind === 'account' ? 'account' : 'API'}</p></div>${plan ? `<span class="plan-pill" title="${esc(plan)}">${esc(plan)}</span>` : ''}<button class="card-detail" aria-label="Details for ${c.title}" data-action="details" data-id="${c.id}">···</button></div>`;
   if (!reading) {
     const setup = c.status !== 'unconnected' && !loading;
     return `<article class="source-card source--${c.id} ${loading ? 'is-loading' : ''}" data-provider="${providerFor(c.id)}" aria-label="${c.title}">${header}<div class="setup-body">${loading ? '<span class="skeleton-value" aria-hidden="true"></span><p class="setup-title">Reading your usage…</p><p class="setup-description">Connecting directly to this source.</p>' : `<span class="setup-glyph" aria-hidden="true">⌁</span><p class="setup-title">${setup ? c.id === 'claude' ? 'Reconnect Claude Code' : 'A little setup needed' : 'Ready when you are'}</p><p class="setup-description">${esc(c.error || c.description)}</p><button class="button" data-action="details" data-id="${c.id}">${c.id === 'claude' ? 'Connect account' : c.kind === 'api' ? 'Set up usage access' : 'Connect account'} <span aria-hidden="true">↗</span></button>`}</div><div class="card-footer"><span>${loading ? 'Checking connection' : 'No usage inferred'}</span><span>${c.kind === 'api' ? 'Reporting key' : 'Desktop account'}</span></div></article>`;
   }
-  const monthly = finite(c.monthly), number = monthly ? formatCount(c.monthly) : finite(w?.percent) ? Math.round(w.percent) : '—';
-  const unit = monthly ? c.unit : finite(w?.percent) ? '% used' : '';
-  const label = monthly ? `${c.partial && c.id === 'claude' ? 'On this Mac' : snapshot.month === currentMonth() ? 'Month to date' : 'Monthly activity'} <strong>· ${esc(c.unit)}</strong>` : w ? `${esc(w.label)} allowance` : 'Monthly usage not reported';
-  return `<article class="source-card source--${c.id} ${loading ? 'is-loading' : ''}" data-provider="${providerFor(c.id)}" aria-label="${c.title}">${header}<div class="metric-row"><div><div class="metric-value" title="${esc(fullCount(c.monthly))}">${number}${!monthly && unit ? `<small>${unit}</small>` : ''}</div><p class="metric-label">${label}</p></div>${pools.length ? '' : gauge(windowPercent, w?.label || 'Monthly target')}</div>${creditSection(c)}${cardCosts(c, snapshot)}${!c.creditBalances?.length && c.balanceSummary ? `<p class="balance-summary">${esc(c.balanceSummary)}</p>` : ""}${chart(c)}<div class="trend-label"><span>01 ${new Date(snapshot.month + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }).toUpperCase()}</span><span>${monthly ? 'DAILY ACTIVITY · UTC' : w ? 'REPORTED ALLOWANCE' : 'AWAITING MONTHLY REPORT'}</span></div>${pools.length ? allowancePools(pools) : w ? `<div class="window-row"><strong>${Math.round(w.percent)}% used</strong><span>· ${esc(w.label)}</span><span class="reset-label">${Number.isFinite(w.resetsAt) ? 'Resets ' + reset(w.resetsAt) : 'Reset not reported'}</span></div>` : c.monthlyTarget ? `<div class="window-row"><strong>${formatCount(c.monthlyTarget)} ${esc(c.unit)}</strong><span>monthly target</span></div>` : '<div class="window-row"><span>No monthly target set</span></div>'}<div class="card-footer"><span class="status-text"><i class="status-dot ${stale ? 'stale' : ''}"></i>${stale ? 'Last reading · offline or delayed' : loading ? 'Refreshing' : since(c.lastUpdatedAt)}</span>${c.partial ? '<span class="source-note">Partial history</span>' : `<span>${snapshot.demo ? 'Sample data' : 'Source connected'}</span>`}</div></article>`;
+  const monthly = finite(c.monthly);
+  return `<article class="source-card source--${c.id} ${loading ? 'is-loading' : ''}" data-provider="${providerFor(c.id)}" aria-label="${c.title}">${header}<div class="metric-row"><div><div class="metric-value" title="${esc(fullCount(c.monthly))}">${esc(activityReading(c))}</div><p class="metric-label">Activity · ${esc(activityCaption(c, snapshot.month))}</p></div></div><section class="metric-allowance-readings" aria-label="Allowances · current"><h4>Allowances · current</h4>${allowanceMarkup(c)}</section><section class="metric-balance-readings" aria-label="Balances · current"><h4>Balances · current</h4>${balanceMarkup(c)}</section>${cardCosts(c, snapshot)}${chart(c)}<div class="trend-label"><span>01 ${new Date(snapshot.month + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }).toUpperCase()}</span><span>DAILY ACTIVITY · UTC</span></div>${c.monthlyTarget ? `<div class="window-row"><strong>${formatCount(c.monthlyTarget)} ${esc(c.unit)}</strong><span>monthly target · entered locally</span></div>` : ''}<div class="card-footer"><span class="status-text"><i class="status-dot ${stale ? 'stale' : ''}"></i>${stale ? 'Last reading · offline or delayed' : loading ? 'Refreshing' : since(c.lastUpdatedAt)}</span>${c.partial ? '<span class="source-note">Partial history</span>' : `<span>${snapshot.demo ? 'Sample data' : 'Source connected'}</span>`}</div></article>`;
 }
 function fitInstruments() {
+  const mini = document.querySelector('.mini-list');
+  if (mini) mini.style.setProperty('--mini-row-tracks', [...mini.children].map(row => `minmax(0,${56 + Number(row.dataset.limitCount || 0) * 12}fr)`).join(' '));
   const display = document.querySelector('.display-rack');
   if (display) {
     const fit = dashboardLayout(display.clientWidth, display.clientHeight, display.children.length);
     display.style.setProperty('--display-columns', fit.columns);
     display.style.setProperty('--display-rows', fit.rows);
     display.dataset.columns = fit.columns;
+    const first = display.firstElementChild;
+    if (first) display.style.setProperty('--display-gauge-width', `${first.clientWidth - parseFloat(getComputedStyle(first.firstElementChild).paddingLeft) * 2}px`);
+    if (display.clientWidth <= 700 && display.clientHeight / display.children.length >= 72) {
+      const tracks = [...display.children].map(panel => `minmax(0,${61 + Number(panel.dataset.limitCount || 0) * 12}fr)`);
+      display.style.setProperty('--display-row-tracks', tracks.join(' '));
+    } else display.style.removeProperty('--display-row-tracks');
   }
   const rack = document.querySelector('.instrument-rack');
   if (!rack || !rack.clientWidth || !rack.clientHeight) return;
@@ -127,9 +132,12 @@ function render() {
   }
 }
 function renderConnections() {
-  $('#secrets-path').textContent = snapshot.settings.secretsPath || 'No file selected';
+  $('#secrets-path').textContent = snapshot.demo ? 'Hidden in Demo mode' : snapshot.settings.secretsPath || 'No file selected';
+  $('#choose-secrets').disabled = snapshot.demo;
+  $('#demo-randomize').hidden = !snapshot.demo;
   const warning = snapshot.fileError || snapshot.vaultError; $('#connection-warning').hidden = !warning; $('#connection-warning').textContent = warning || '';
-  $('#demo-button').textContent = snapshot.demo ? 'Use live data' : 'Preview';
+  $('#demo-button').textContent = snapshot.demo ? 'On' : 'Off';
+  $('#demo-button').setAttribute('aria-checked', String(snapshot.demo));
   $('#connection-list').innerHTML = snapshot.cards.map(c => `<div class="connection-row" data-provider="${providerFor(c.id)}"><span class="source-icon">${providerLogo(c.id)}</span><div class="connection-text"><strong>${c.title}</strong><p>${snapshot.demo ? 'Showing sample data' : c.error ? esc(c.error) : hasReading(c) ? `Connected · ${esc(c.sourceLabel)} · ${since(c.lastUpdatedAt)}` : 'Not connected yet'}</p></div><button class="button" data-action="details" data-id="${c.id}">${c.kind === 'api' ? 'Configure' : hasReading(c) ? 'Details' : 'Connect'}</button></div>`).join('');
 }
 function showConnections() { if (snapshot.presentation?.dashboard) return; renderConnections(); $('#connections-dialog').showModal(); }
@@ -163,9 +171,10 @@ function renderDetails() {
     catch (err) { button.disabled = false; button.textContent = 'Save securely'; notify(err.message, true); }
   });
   $('#target-form')?.addEventListener('submit', async e => { e.preventDefault(); const v = $('#monthly-target').value; detailDirty = false; const result = await run(() => api.target(c.id, v ? Number(v) : null)); if (!result) return; renderDetails(); $('#target-form button').focus(); notify(v ? 'Monthly target saved.' : 'Monthly target removed.'); });
+  if (snapshot.demo) for (const field of $('#details-content').querySelectorAll('input, button[type=submit], [data-action=connect], [data-action=signin]')) field.disabled = true;
   $('#details-content').addEventListener('input', () => { detailDirty = true; }, { once: true });
 }
-function update(value) { if (value?.cards) { if (value.presentation?.dashboard) view = value.presentation.view; const signInChanged = snapshot?.claudeSignIn?.message !== value.claudeSignIn?.message; snapshot = value; document.documentElement.dataset.theme = value.appearance?.dark ? 'dark' : 'light'; $('#appearance-mode').value = value.settings.colorMode || 'auto'; render(); if (signInChanged && selected === 'claude' && $('#details-dialog').open && !detailDirty) renderDetails(); } }
+function update(value) { if (value?.cards) { if (value.presentation?.dashboard) view = value.presentation.view; const signInChanged = snapshot?.claudeSignIn?.message !== value.claudeSignIn?.message; if (snapshot && snapshot.demo !== value.demo) { detailDirty = false; $('#details-dialog').close(); $('#details-content').replaceChildren(); $('#toast').hidden = true; $('#toast').textContent = ''; } snapshot = value; document.documentElement.dataset.theme = value.appearance?.dark ? 'dark' : 'light'; $('#appearance-mode').value = value.settings.colorMode || 'auto'; render(); if (signInChanged && selected === 'claude' && $('#details-dialog').open && !detailDirty) renderDetails(); } }
 function notify(message, error = false) { const toast = $('#toast'), modal = [...document.querySelectorAll('dialog[open]')].at(-1); clearTimeout(toastTimer); (modal || document.body).append(toast); toast.classList.toggle('in-dialog', !!modal); toast.textContent = message; toast.hidden = false; toast.classList.toggle('error', error); toastTimer = setTimeout(() => { toast.hidden = true; }, error ? 6500 : 4000); }
 async function run(fn) { try { const value = await fn(); if (value?.cards) update(value); else if (typeof value === 'string') notify(value); return value; } catch (e) { notify(e.message || 'The action could not finish.', true); return null; } }
 async function action(name, id) {
@@ -191,7 +200,8 @@ $('#connections-button').addEventListener('click', showConnections);
 $('#appearance-mode').addEventListener('change', () => run(() => api.appearance($('#appearance-mode').value)));
 $('#refresh-button').addEventListener('click', () => run(() => api.refresh()));
 $('#choose-secrets').addEventListener('click', () => run(() => api.chooseSecrets()));
-$('#demo-button').addEventListener('click', async () => { await run(() => api.demo(!snapshot.demo)); $('#connections-dialog').close(); });
+$('#demo-button').addEventListener('click', async () => { const button = $('#demo-button'); button.disabled = true; await run(() => api.demo(!snapshot.demo)); button.disabled = false; renderConnections(); });
+$('#demo-randomize').addEventListener('click', () => run(() => api.refresh()));
 for (const d of document.querySelectorAll('dialog')) d.addEventListener('click', e => { if (e.target === d) { const r = d.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) d.close(); } });
 $('#details-dialog').addEventListener('close', () => { const host = $('#connections-dialog').open ? $('#connections-dialog') : $('#main'); [...host.querySelectorAll(`[data-action="details"][data-id="${selected}"]`)].find(el => el.getClientRects().length)?.focus({ preventScroll: true }); });
 $('#connections-dialog').addEventListener('close', () => $('#connections-button').focus({ preventScroll: true }));

@@ -6,6 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Tokenlight</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="demo-mode.css">
 </head>
 <body>
   <div class="titlebar"><span class="window-label">TOKENLIGHT <span id="version">0.2</span></span><span id="sync-status" class="sync-status">Starting up</span></div>
@@ -31,11 +32,13 @@
   <dialog id="connections-dialog" aria-labelledby="connections-title">
     <div class="dialog-header"><div><span class="eyebrow">DATA SOURCES</span><h2 id="connections-title">Connections</h2></div><button class="icon-button" data-close="connections-dialog" aria-label="Close connections">✕</button></div>
     <div class="dialog-content">
+      <div class="demo-option screenshot-demo"><div><strong>Demo mode</strong><p id="demo-description">Randomized data for screenshots. Live reads pause in every window. Stays on until you turn it off.</p></div><button class="button demo-switch" id="demo-button" role="switch" aria-checked="false" aria-label="Demo mode" aria-describedby="demo-description">Off</button></div>
+      <button class="button button-quiet" id="demo-randomize" hidden>Randomize sample data</button>
       <p class="dialog-intro">Connect an existing desktop account or a usage-reporting key. Tokenlight only reads usage; it doesn’t run prompts or change your billing.</p>
       <div class="file-box"><div><strong>Use your secrets file</strong><p id="secrets-path">No file selected</p><span>Keys are read when needed. The file is never copied.</span></div><button class="button" id="choose-secrets">Choose file…</button></div>
       <p id="connection-warning" class="connection-warning" hidden></p>
       <div id="connection-list" class="connection-list"></div>
-      <div class="demo-option"><div><strong>Take a look with sample data</strong><p>Explore the dashboard without connecting an account.</p></div><button class="button button-quiet" id="demo-button">Preview</button></div>
+
     </div>
   </dialog>
   <dialog id="details-dialog" aria-labelledby="details-title"><div class="dialog-header"><div class="detail-heading"><span id="details-logo" class="source-icon" aria-hidden="true"></span><div><span class="eyebrow" id="details-provider"></span><h2 id="details-title"></h2></div></div><button class="icon-button" data-close="details-dialog" aria-label="Close source details">✕</button></div><div class="dialog-content" id="details-content"></div></dialog>
