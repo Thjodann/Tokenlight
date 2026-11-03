@@ -4,7 +4,7 @@ import { dashboardView, dashboardLayout } from '../src/dashboard-view.mjs';
 import { demoCards } from '../src/fixtures.mjs';
 const snapshot = () => ({ month: '2026-11', demo: true, settings: { accountProfiles: {}, targets: {} }, cards: demoCards('2026-11', Date.parse('2026-11-02T00:00:00Z')) });
 test('four display views allow only local filters and preserve their source filter', () => {
-  for (const [view, count] of [['overview', 7], ['account', 3], ['api', 4], ['insights', 0]]) {
+  for (const [view, count] of [['overview', 5], ['account', 3], ['api', 4], ['insights', 0]]) {
     const html = dashboardView(snapshot(), view);
     assert.equal((html.match(/<article /g) || []).length, count);
     assert.doesNotMatch(html, /<(input|select|a|form)\b|data-action=/);
@@ -51,4 +51,12 @@ test('micro dashboard avoids seven clipped single-column rows', () => {
   const layout = dashboardLayout(248, 106, 7);
   assert.equal(layout.columns, 2);
   assert.equal(layout.rows, 4);
+});
+
+test('passive pop-outs use source-specific rings and sparklines instead of detailed cards', () => {
+ const s=snapshot();s.cards[0].windows=[{label:'Session',percent:125}];s.cards.find(c=>c.id==='cursor').windows=[];
+ const html=dashboardView(s);
+ assert.match(html,/125% used/);assert.match(html,/stroke-dasharray="100 100"/);
+ assert.match(html,/activity-line/);assert.match(html,/dial-unreported/);
+ assert.doesNotMatch(html,/monitor-cost|metric-limit-track|monitor-pools|source-card/);
 });

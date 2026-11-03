@@ -62,16 +62,14 @@ function card(c) {
 }
 function fitInstruments() {
   const mini = document.querySelector('.mini-list');
-  if (mini) mini.style.setProperty('--mini-row-tracks', [...mini.children].map(row => `minmax(0,${56 + Number(row.dataset.limitCount || 0) * 12}fr)`).join(' '));
+  if (mini) mini.style.setProperty('--mini-row-tracks', [...mini.children].map(row => `minmax(0,${56 * Number(row.dataset.memberCount || 1) + Number(row.dataset.limitCount || 0) * 12}fr)`).join(' '));
   const display = document.querySelector('.monitor-rack');
   if (display) {
     const fit = dashboardLayout(display.clientWidth, display.clientHeight, display.children.length);
     display.style.setProperty('--display-columns', fit.columns);
     display.style.setProperty('--display-rows', fit.rows);
     display.dataset.columns = fit.columns;
-    if (fit.columns === 1 && display.clientHeight / display.children.length >= 72) {
-      display.style.setProperty('--monitor-row-tracks', [...display.children].map(row => `minmax(0,${92 + Number(row.dataset.limitCount || 0) * 13}fr)`).join(' '));
-    } else display.style.removeProperty('--monitor-row-tracks');
+    display.style.setProperty('--monitor-row-tracks', [...display.children].map(row => `minmax(0,${Number(row.dataset.sourceCount || 1) > 1 ? 1.4 : 1}fr)`).join(' '));
 
   }
   const rack = document.querySelector('.instrument-rack');
