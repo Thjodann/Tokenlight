@@ -228,7 +228,7 @@ app.whenReady().then(async () => {
     } catch (e) { return { ok: false, error: e instanceof providers.ProviderError || ['save-key', 'set-target', 'set-account-profile', 'get-snapshot', 'demo'].includes(channel) ? e.message : 'The action could not finish. Please try again.' }; }
   });
   handle('get-snapshot', null, true);
-  handle('set-window-view', (entry, view) => { dashboards.setView(entry, view); });
+  handle('set-window-view', (entry, view) => { dashboards.setView(entry, view); return service.snapshot(entry.month); }, true);
   handle('new-dashboard-window', async entry => { await createWindow(entry); return null; });
   handle('set-appearance', (_entry, mode) => service.setColorMode(mode));
   handle('set-layout', (_entry, mode) => service.setLayoutMode(mode));

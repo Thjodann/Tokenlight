@@ -27,7 +27,9 @@ test('view copies, historical months and manual window closure remain independen
   const display = windows.add(kiosk, { ...root, kiosk: true });
   windows.setView(root, 'api'); root.month = '2026-11'; root.followCurrent = true;
   assert.equal(display.view, 'account'); assert.equal(display.month, '2026-10');
-  assert.throws(() => windows.setView(display, 'overview'));
+  windows.setView(display, 'overview');
+  assert.equal(display.view, 'overview'); assert.equal(root.view, 'api');
+  assert.equal(display.month, '2026-10');
   assert.throws(() => windows.setView(root, 'invalid'));
   windows.rollover('2026-12'); assert.equal(root.month, '2026-12'); assert.equal(display.month, '2026-10');
   assert.deepEqual(windows.months(), ['2026-12', '2026-10']);
@@ -86,9 +88,17 @@ test('main bootstrap keeps kiosk IPC read-only and display windows alive after m
   assert.equal((await call(main, 'new-dashboard-window')).ok, true);
   const kiosk = windows[1], display = (await call(kiosk, 'get-snapshot')).value;
   assert.equal(display.presentation.view, 'api'); assert.equal(display.month, '2026-10'); assert.equal(display.presentation.dashboard, true);
-  for (const channel of ['set-appearance', 'set-layout', 'set-account-profile', 'refresh', 'set-month', 'save-key', 'set-target', 'choose-secrets', 'open-provider', 'connect', 'demo', 'sign-in-claude', 'export', 'set-window-view', 'new-dashboard-window']) {
+  for (const channel of ['set-appearance', 'set-layout', 'set-account-profile', 'refresh', 'set-month', 'save-key', 'set-target', 'choose-secrets', 'open-provider', 'connect', 'demo', 'sign-in-claude', 'export', 'new-dashboard-window']) {
     assert.equal((await call(kiosk, channel)).ok, false, `${channel} must reject a kiosk caller before doing work`);
   }
+  const switched = await call(kiosk, 'set-window-view', 'account');
+  assert.equal(switched.ok, true); assert.equal(switched.value.presentation.view, 'account');
+  assert.equal(switched.value.settings.secretsPath, undefined);
+  assert.equal((await call(main, 'get-snapshot')).value.presentation.view, 'api');
+  assert.equal((await call(kiosk, 'get-snapshot')).value.presentation.view, 'account');
+  assert.equal((await call(kiosk, 'set-window-view', 'invalid')).ok, false);
+  assert.equal((await handlers.get('set-window-view')({ sender: kiosk.webContents, senderFrame: {} }, 'api')).ok, false);
+  assert.equal((await call(kiosk, 'get-snapshot')).value.presentation.view, 'account');
   assert.equal((await handlers.get('get-snapshot')({ sender: main.webContents, senderFrame: {} })).ok, false);
   main.close(); assert.equal(kiosk.isDestroyed(), false); assert.equal(app.didQuit, undefined);
   timer(); assert.equal(kiosk.sent.at(-1)[1].month, '2026-10');

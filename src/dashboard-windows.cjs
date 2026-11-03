@@ -17,7 +17,7 @@ class DashboardWindows {
     return entry;
   }
   setView(entry, value) {
-    if (entry.kiosk || entry.dashboard || !VIEWS.includes(value)) throw new Error('Choose an available view.');
+    if (!VIEWS.includes(value)) throw new Error('Choose an available view.');
     entry.view = value;
   }
   rollover(month) { for (const e of this.entries.values()) if (e.followCurrent) e.month = month; }

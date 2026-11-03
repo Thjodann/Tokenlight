@@ -63,18 +63,16 @@ function card(c) {
 function fitInstruments() {
   const mini = document.querySelector('.mini-list');
   if (mini) mini.style.setProperty('--mini-row-tracks', [...mini.children].map(row => `minmax(0,${56 + Number(row.dataset.limitCount || 0) * 12}fr)`).join(' '));
-  const display = document.querySelector('.display-rack');
+  const display = document.querySelector('.monitor-rack');
   if (display) {
     const fit = dashboardLayout(display.clientWidth, display.clientHeight, display.children.length);
     display.style.setProperty('--display-columns', fit.columns);
     display.style.setProperty('--display-rows', fit.rows);
     display.dataset.columns = fit.columns;
-    const first = display.firstElementChild;
-    if (first) display.style.setProperty('--display-gauge-width', `${first.clientWidth - parseFloat(getComputedStyle(first.firstElementChild).paddingLeft) * 2}px`);
-    if (display.clientWidth <= 700 && display.clientHeight / display.children.length >= 72) {
-      const tracks = [...display.children].map(panel => `minmax(0,${61 + Number(panel.dataset.limitCount || 0) * 12}fr)`);
-      display.style.setProperty('--display-row-tracks', tracks.join(' '));
-    } else display.style.removeProperty('--display-row-tracks');
+    if (fit.columns === 1 && display.clientHeight / display.children.length >= 72) {
+      display.style.setProperty('--monitor-row-tracks', [...display.children].map(row => `minmax(0,${92 + Number(row.dataset.limitCount || 0) * 13}fr)`).join(' '));
+    } else display.style.removeProperty('--monitor-row-tracks');
+
   }
   const rack = document.querySelector('.instrument-rack');
   if (!rack || !rack.clientWidth || !rack.clientHeight) return;
@@ -92,7 +90,9 @@ function render() {
     for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
     $('#version').textContent = snapshot.version;
     document.title = `Tokenlight — ${view === 'account' ? 'Accounts' : view === 'api' ? 'API usage' : view === 'insights' ? 'Insights' : 'Overview'} · ${snapshot.month}`;
+    const focusedView = document.activeElement?.dataset?.dashboardView;
     $('#main').innerHTML = dashboardView(snapshot, view);
+    if (focusedView) document.querySelector(`[data-dashboard-view="${focusedView}"]`)?.focus({ preventScroll: true });
     fitInstruments();
     return;
   }
@@ -190,7 +190,7 @@ async function action(name, id) {
   if (name === 'live') return run(() => api.demo(false));
   if (['previous', 'next'].includes(name)) { const d = new Date(snapshot.month + '-01T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + (name === 'previous' ? -1 : 1)); return run(() => api.month(d.toISOString().slice(0, 7))); }
 }
-document.addEventListener('click', e => { if (snapshot?.presentation?.dashboard) return; const close = e.target.closest('[data-close]'); if (close) return $('#' + close.dataset.close).close(); const button = e.target.closest('[data-action]'); if (button) action(button.dataset.action, button.dataset.id); const nav = e.target.closest('[data-view]'); if (nav) { view = nav.dataset.view; void api.viewState(view).catch(() => {}); render(); } });
+document.addEventListener('click', e => { const displayNav = e.target.closest('[data-dashboard-view]'); if (displayNav && snapshot?.presentation?.dashboard) { void run(() => api.viewState(displayNav.dataset.dashboardView)); return; } if (snapshot?.presentation?.dashboard) return; const close = e.target.closest('[data-close]'); if (close) return $('#' + close.dataset.close).close(); const button = e.target.closest('[data-action]'); if (button) action(button.dataset.action, button.dataset.id); const nav = e.target.closest('[data-view]'); if (nav) { view = nav.dataset.view; void api.viewState(view).catch(() => {}); render(); } });
 compactQuery.addEventListener('change', () => render());
 wideQuery.addEventListener('change', () => render());
 desktopQuery.addEventListener('change', () => render());

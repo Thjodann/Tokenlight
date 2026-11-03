@@ -3,14 +3,17 @@ import assert from 'node:assert/strict';
 import { dashboardView, dashboardLayout } from '../src/dashboard-view.mjs';
 import { demoCards } from '../src/fixtures.mjs';
 const snapshot = () => ({ month: '2026-11', demo: true, settings: { accountProfiles: {}, targets: {} }, cards: demoCards('2026-11', Date.parse('2026-11-02T00:00:00Z')) });
-test('all four display views are passive and preserve their source filter', () => {
-  for (const [view, count] of [['overview', 7], ['account', 3], ['api', 4], ['insights', 7]]) {
+test('four display views allow only local filters and preserve their source filter', () => {
+  for (const [view, count] of [['overview', 7], ['account', 3], ['api', 4], ['insights', 0]]) {
     const html = dashboardView(snapshot(), view);
     assert.equal((html.match(/<article /g) || []).length, count);
-    assert.doesNotMatch(html, /<(button|input|select|a|form)\b|data-action=|tabindex=/);
-    assert.match(html, /SAMPLE DATA/); assert.match(html, /November 2026/);
+    assert.doesNotMatch(html, /<(input|select|a|form)\b|data-action=/);
+    assert.equal((html.match(/data-dashboard-view=/g) || []).length, 4);
+    assert.match(html, new RegExp(`data-dashboard-view="${view}"[^>]*aria-pressed="true"`));
+    assert.match(html, /SAMPLE DATA/); assert.match(html, /Nov 2026/);
     assert.match(html, /not an extra charge/);
-    assert.match(html, /Activity · selected month/);
+    assert.match(html, /Activity · 2026-11/);
+    assert.match(html, /role="img"/);
   }
 });
 test('display readings keep zero, missing, stale, credit cap and separate allowance semantics', () => {
@@ -42,4 +45,10 @@ test('a tall sidebar keeps one instrument per row to retain room for each source
     assert.equal(fit.columns, 1);
     assert.equal(fit.rows, count);
   }
+});
+
+test('micro dashboard avoids seven clipped single-column rows', () => {
+  const layout = dashboardLayout(248, 106, 7);
+  assert.equal(layout.columns, 2);
+  assert.equal(layout.rows, 4);
 });
