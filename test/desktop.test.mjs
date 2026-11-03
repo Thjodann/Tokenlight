@@ -15,7 +15,7 @@ test('desktop and wide layouts expose an exhausted paid cap with or without a se
     }
   }
 });
-test('desktop ledger preserves seven sources, filters and source details without stretched tiles', () => {
+test('desktop instruments preserve seven sources, filters and source details without stretched tiles', () => {
   for(const [view,count] of [['overview',7],['account',3],['api',4]]) {
     const html = wideView(snapshot,view,{desktop:true});
     assert.equal((html.match(/class="desk-source-row"/g)||[]).length,count);

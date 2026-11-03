@@ -1,0 +1,146 @@
+/* Main-window instruments; popout windows have their own independent layout. */
+.allowance-workspace {
+  display: grid; grid-template-rows: auto auto minmax(0,1fr) minmax(120px,17vh) auto;
+  gap: 10px; height: 100%; min-height: 0;
+}
+.allowance-workspace .wide-context { min-height: 28px; flex: none; }
+.allowance-workspace .wide-totals { display: none; }
+.allowance-workspace .desk-metrics { border: 0; border-bottom: 1px solid var(--line); grid-template-columns: 1fr 1fr 1fr 1.4fr .8fr; }
+.allowance-workspace .desk-metric { padding: 8px 14px 12px; gap: 5px; }
+.allowance-workspace .desk-metric:first-child { padding-left: 0; }
+.allowance-workspace .desk-metric>span { font-size: 10px; letter-spacing: 1px; }
+.allowance-workspace .desk-metric>strong { font-size: 28px; font-weight: 550; letter-spacing: -.9px; }
+.allowance-workspace .desk-metric:nth-child(n+3)>strong { font-size: 16px; letter-spacing: -.3px; }
+.allowance-workspace .desk-metric small { font-size: 10px; }
+.allowance-workspace .desk-ledger { display: flex; flex-direction: column; min-height: 0; overflow: visible; border: 0; }
+.allowance-workspace .desk-section-heading { min-height: 25px; flex: none; margin: 0 0 5px; }
+.allowance-workspace .desk-section-heading h1 { font-size: 13px; font-weight: 550; }
+.allowance-workspace .desk-section-heading h1>span { font-size: 10px; text-transform: uppercase; letter-spacing: .8px; margin-left: 8px; }
+.allowance-workspace .desk-section-heading>span { font-size: 10px; }
+.desk-instruments { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); min-height: 0; flex: 1; border-top: 1px solid var(--line); }
+.desk-instruments[data-count="3"] { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.desk-instruments[data-count="4"] { grid-template-columns: repeat(4,minmax(0,1fr)); }
+.desk-instruments[data-count="1"] { grid-template-columns: 1fr; }
+.allowance-workspace .desk-provider { display: flex; flex-direction: column; gap: 0; min-width: 0; min-height: 0; padding: 0 15px; border: 0; border-right: 1px solid var(--line); background: transparent; }
+.allowance-workspace .desk-provider:first-child { padding-left: 0; }
+.allowance-workspace .desk-provider:last-child { border-right: 0; padding-right: 0; }
+.allowance-workspace .desk-provider>header { display: flex; align-items: center; align-self: stretch; gap: 8px; padding: 10px 0 4px; min-height: 40px; flex: none; color: var(--source-accent); }
+.allowance-workspace .desk-provider h2 { font-size: 16px; font-weight: 550; letter-spacing: -.3px; overflow: visible; }
+.allowance-workspace .desk-provider>header .source-icon { width: 23px; height: 23px; background: transparent; border: 0; border-radius: 0; }
+.allotment-plan { font-size: 10px; color: var(--muted); margin-left: auto; white-space: nowrap; }
+.allotment-stage { display: grid; grid-template-rows: minmax(0,1fr) 116px; align-items: center; min-height: 0; flex: 1; container-type: size; }
+.allotment-dial { width: min(100%,240px,calc(100cqh - 116px)); aspect-ratio: 1; margin: 0 auto; position: relative; color: var(--source-accent); font-variant-numeric: tabular-nums; }
+.allotment-dial>svg { display: block; width: 100%; height: 100%; fill: none; stroke-width: 9; stroke-linecap: round; }
+.allotment-track { stroke: var(--track); }
+.allotment-fill { stroke: currentColor; }
+.allotment-ring[data-ring="1"] .allotment-fill { opacity: .7; }
+.allotment-ring[data-ring="2"] .allotment-fill { opacity: .45; }
+.allotment-track.is-unreported { opacity: .55; }
+.allotment-dial figcaption { position: absolute; inset: 31% 10% 28%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--ink); }
+.allotment-dial figcaption>strong { font-size: clamp(20px,calc((100cqh - 116px)*.19),44px); font-weight: 550; letter-spacing: -1.7px; line-height: 1; }
+.allotment-dial figcaption>strong small { font-size: .4em; color: var(--muted); letter-spacing: -.5px; margin-left: 2px; }
+.allotment-dial figcaption>span { font-size: 11px; color: var(--muted); margin-top: 5px; }
+.allotment-dial-caption { position: absolute; inset: auto 5% 3%; text-align: center; font-size: 10px; color: var(--muted); line-height: 1.2; }
+.allotment-legend { display: flex; flex-direction: column; justify-content: center; gap: 8px; min-height: 0; padding: 4px 0 8px; }
+.allotment-limit { display: flex; align-items: flex-start; gap: 7px; min-width: 0; font-variant-numeric: tabular-nums; }
+.allotment-limit>i { width: 5px; height: 18px; border-radius: 2px; background: var(--source-accent); flex: none; margin-top: 2px; }
+.allotment-limit[data-ring="1"]>i { opacity: .7; }
+.allotment-limit[data-ring="2"]>i { opacity: .45; }
+.allotment-limit>span { font-size: 11px; flex: 1; min-width: 0; line-height: 1.3; }
+.allotment-limit>span>small { display: block; color: var(--muted); font-size: 9px; margin-top: 3px; line-height: 1.3; }
+.allotment-limit>strong { font-size: 16px; line-height: 1; font-weight: 550; color: var(--source-accent); white-space: nowrap; }
+.allotment-limit>strong>small { font-size: 8px; color: var(--muted); font-weight: 400; margin-left: 2px; }
+.allotment-unreported { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; color: var(--muted); font-size: 11px; text-align: center; }
+.allotment-unreported>small { font-size: 9px; }
+.allotment-cap { color: var(--warning); font-size: 10px; margin-left: auto; flex: none; white-space: nowrap; }
+.allotment-activity-label { display: flex; justify-content: space-between; gap: 4px; border-top: 1px solid var(--line-strong); padding: 8px 0 5px; font-size: 9px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); flex: none; }
+.allotment-activity-label small { font-size: 9px; text-transform: none; letter-spacing: 0; }
+.allowance-workspace .desk-provider-rows { display: flex; flex-direction: column; height: 172px; flex: none; min-width: 0; }
+.allowance-workspace .desk-source-row { display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 8px 0; min-height: 0; background: none; border: 0; border-radius: 0; color: var(--ink); text-align: left; flex: none; width: 100%; font-variant-numeric: tabular-nums; }
+.allowance-workspace .desk-source-row:hover { background: var(--raised); }
+.allowance-workspace .desk-source-row:focus-visible { outline: 2px solid var(--source-accent); outline-offset: 3px; }
+.allowance-workspace .desk-source-row+.desk-source-row { border-top: 1px solid var(--line); }
+.allotment-source-top { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.allotment-source-top>strong { font-size: 11px; font-weight: 550; min-width: 0; white-space: nowrap; }
+.allotment-source-top>b { margin-left: auto; font-size: 17px; letter-spacing: -.5px; font-weight: 550; white-space: nowrap; }
+.allotment-source-top>span:last-child { font-size: 18px; color: var(--muted); margin-left: 2px; }
+.allotment-status { font-size: 7px; color: var(--source-accent); font-style: normal; }
+.allotment-status[data-state="stale"],.allotment-status[data-state="setup"],.allotment-status[data-state="unconnected"] { color: var(--warning); }
+.allotment-source-caption { font-size: 9px; color: var(--muted); }
+.allotment-balance { display: flex; justify-content: space-between; gap: 5px; font-size: 9px; color: var(--muted); }
+.allotment-balance>span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.allotment-balance>strong { color: var(--ink); font-size: 11px; font-weight: 500; white-space: nowrap; }
+.allotment-source-cost { display: flex; justify-content: space-between; gap: 5px; font-size: 9px; color: var(--muted); padding-top: 2px; }
+.allotment-source-cost b { color: var(--ink); font-weight: 500; margin-left: 3px; }
+.allowance-workspace .desk-analysis { display: grid; grid-template-columns: minmax(0,1.8fr) minmax(0,1fr); min-height: 0; overflow: hidden; margin-top: 2px; }
+.allowance-workspace .desk-chart { min-height: 0; flex: 1; max-height: none; }
+.allowance-workspace .desk-history,.allowance-workspace .desk-models { padding-top: 8px; }
+.allowance-workspace .desk-model-list { overflow: hidden; grid-template-rows: repeat(3,minmax(0,1fr)); }
+.allowance-workspace .desk-model { padding: 4px 0; min-height: 0; }
+.allowance-workspace .desk-model:nth-child(n) { display: flex; }
+.allowance-workspace .desk-model-list .desk-model>span:nth-child(2) { overflow: hidden; }
+.allowance-workspace .desk-model-list strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.allowance-workspace .desk-chart-note { display: none; }
+.allowance-workspace .desk-footer { margin: 0; padding: 0; min-height: 12px; font-size: 9px; }
+@media(max-height:1000px) {
+  .allowance-workspace { grid-template-rows: auto auto minmax(0,1fr) auto; gap: 6px; }
+  .allowance-workspace .desk-analysis { display: none; }
+  .allowance-workspace .desk-metric { padding-block: 5px; }
+}
+@media(max-width:1199px) and (min-height:601px) {
+  .desk-instruments { grid-template-columns: repeat(3,minmax(0,1fr)); grid-template-rows: repeat(2,minmax(0,1fr)); }
+  .desk-instruments[data-count="3"] { grid-template-rows: 1fr; }
+  .desk-instruments[data-count="4"] { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .allowance-workspace { grid-template-rows: auto auto minmax(0,1fr) auto; }
+  .allowance-workspace .desk-analysis { display: none; }
+  .allowance-workspace .desk-provider { padding-inline: 12px; border-bottom: 1px solid var(--line); }
+  .allowance-workspace .desk-provider:nth-child(3) { border-right: 0; }
+  .allowance-workspace .desk-provider:first-child { padding-left: 12px; }
+  .allowance-workspace .desk-provider h2 { font-size: 14px; }
+  .allotment-stage { grid-template-columns: minmax(60px,1fr) minmax(0,1.4fr); grid-template-rows: 1fr; gap: 10px; }
+  .allotment-dial { width: min(100%,170px,95cqh); }
+  .allotment-dial figcaption>strong { font-size: clamp(12px,18cqh,22px); }
+  .allotment-dial figcaption>span,.allotment-dial-caption { display: none; }
+  .allowance-workspace .desk-provider>header { min-height: 32px; padding-top: 6px; }
+  .allotment-limit>span { font-size: 10px; }
+  .allotment-limit>span>small { font-size: 8px; }
+  .allotment-limit>strong { font-size: 14px; }
+  .allotment-limit>strong>small { display: block; text-align: right; font-size: 7px; }
+  .allotment-legend { gap: 4px; }
+  .allotment-limit>span>small { margin-top: 1px; line-height: 1.2; }
+  .allowance-workspace .desk-provider-rows { height: 106px; }
+  .allowance-workspace .desk-provider[data-member-count="1"] .desk-provider-rows { height: 60px; }
+  .allowance-workspace .desk-source-row { padding-block: 4px; gap: 1px; }
+  .allotment-source-top>b { font-size: 14px; }
+  .allotment-source-cost { display: none; }
+  .allowance-workspace .desk-metric:nth-child(5) { display: none; }
+  .allowance-workspace .desk-metrics { grid-template-columns: 1fr 1fr 1fr 1.2fr; }
+}
+@media(max-height:600px) {
+  .allowance-workspace .desk-metric small { display: none; }
+  .allowance-workspace .desk-metric>strong { font-size: 22px; }
+  .allowance-workspace .desk-metric:nth-child(n+3)>strong { font-size: 14px; }
+  .allowance-workspace .desk-provider>header { padding-top: 7px; min-height: 32px; }
+  .allotment-stage { grid-template-columns: minmax(64px,1fr) minmax(0,1.3fr); grid-template-rows: 1fr; gap: 8px; }
+  .allotment-dial { width: min(100%,140px,100cqh); }
+  .allotment-dial figcaption>strong { font-size: 24px; }
+  .allotment-dial figcaption>span { font-size: 9px; margin-top: 3px; }
+  .allotment-dial-caption { font-size: 8px; }
+  .allotment-limit>span { font-size: 10px; }
+  .allotment-limit>strong { font-size: 14px; }
+  .allotment-limit>strong>small { display: block; text-align: right; font-size: 7px; }
+  .allotment-limit>span>small { font-size: 8px; }
+  .allotment-legend { gap: 5px; }
+  .allowance-workspace .desk-provider { padding-inline: 10px; }
+  .allowance-workspace .desk-provider-rows { height: 112px; }
+  .allowance-workspace .desk-source-row { padding-block: 4px; gap: 1px; line-height: 1.2; }
+  .allotment-source-top { line-height: 1.2; }
+  .allotment-source-caption { font-size: 8px; line-height: 1.2; }
+  .allotment-balance { font-size: 8px; line-height: 1.2; }
+  .allotment-balance>strong { font-size: 10px; }
+  .allotment-limit>span>small { margin-top: 1px; line-height: 1.1; }
+  .allotment-legend { gap: 4px; padding-block: 2px; }
+  .allotment-source-cost { display: none; }
+  .allotment-source-top>b { font-size: 14px; }
+  .allotment-activity-label { padding-block: 5px 2px; }
+}

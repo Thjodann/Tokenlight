@@ -326,3 +326,5 @@ body[data-dashboard=true] #main{padding:0;overflow:hidden;scrollbar-gutter:auto}
 @media(max-height:599px){.mini-provider>header{min-height:12px;padding:0 4px;font-size:8px}.mini-provider>header .source-icon{width:11px;height:11px}.mini-provider .mini-row{padding-block:0}.mini-provider .mini-source>span:nth-child(2){font-size:8px}}
 
 .desk-provider-rows .desk-reading .desk-stream-label{display:inline-block;margin:0 6px 0 0;vertical-align:baseline}.desk-provider-rows .desk-row-plot{height:10px;margin-top:2px}
+/* Keep primary activity readable when a grouped compact source has several pools. */
+@container(max-height:290px){.wide-provider .wide-instrument{gap:2px;padding-block:4px}.wide-provider .instrument-reading{flex:none;font-size:15px;line-height:1.1}.wide-provider .instrument-heading,.wide-provider .instrument-credit{flex:none;line-height:1.1}.wide-provider .instrument-pools{gap:2px}.wide-provider .metric-limit{line-height:1.15}}
