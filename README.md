@@ -1,6 +1,7 @@
 # Tokenlight
 <img width="1728" alt="Tokenlight Dashboard" src="https://github.com/user-attachments/assets/4502b391-8cd0-40ca-9857-80b59f03d1fb" />
-<img width="1728" alt="Compact View" src="https://github.com/user-attachments/assets/9c24b9cd-f1f4-4108-8e53-b6196347d5cd" />
+<img width="1728" alt="Tokenlight Instruments" src="https://github.com/user-attachments/assets/92757d9b-9783-43d9-ad82-55a1c38218f4" />
+
 
 <sup><sub>(Dummy data pictured above)</sub></sup>
 
