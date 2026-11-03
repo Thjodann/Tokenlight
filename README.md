@@ -1,11 +1,9 @@
 # Tokenlight
-<img width="1728" alt="Tokenlight Dashboard" src="https://github.com/user-attachments/assets/4502b391-8cd0-40ca-9857-80b59f03d1fb" />
-<img width="1728" alt="Tokenlight Instruments" src="https://github.com/user-attachments/assets/92757d9b-9783-43d9-ad82-55a1c38218f4" />
 
+<img width="2172" height="724" alt="image" src="https://github.com/user-attachments/assets/34851b27-8ebf-41ce-933f-3bc73132867b" />
+<img width="1728" alt="Tokenlight Dashboard" src="https://github.com/user-attachments/assets/aeee28a6-4913-471b-8704-5dcc792c8de9" />
 
-<sup><sub>(Dummy data pictured above)</sub></sup>
-
-A personal macOS app for viewing OpenAI/Codex, Anthropic/Claude Code, Cursor, ElevenLabs and Ollama Cloud usage. Source and scaffold are retained until human acceptance.
+### A personal macOS app for viewing OpenAI/Codex, Anthropic/Claude Code, Cursor, ElevenLabs and Ollama Cloud usage. Source and scaffold are retained until human acceptance.
 
 ## Rebuild
 
@@ -19,6 +17,8 @@ npm run build
 ```
 
 The build uses the pinned Electron and icon-renderer versions in package-lock.json and invokes the installed Electron package’s idempotent runtime installer. A fresh npm ci is sufficient; no prior Electron launch or separate manual download is required. A Codex native helper and its receipt live in vendor/; the build discovers the local official Codex CLI only when that helper has not yet been prepared. Source archives retain the helper so later rebuilds do not depend on the installed Codex version.
+
+<img width="283" height="205" alt="image" src="https://github.com/user-attachments/assets/2e487e1b-7f50-4b54-8d7d-3a3a3a283081" />
 
 ## Run
 
@@ -38,7 +38,10 @@ For an isolated sample-data preview, use TOKENLIGHT_PROFILE=/absolute/owned/test
 
 Project evidence lives in .codex/output/. Live probes save shapes and status codes only, excluding raw responses, credentials and account identifiers. QA uses task-owned data directories. Personal client sessions and shared settings are read, never rewritten by the monitor.
 
+<img width="584" height="381" alt="image" src="https://github.com/user-attachments/assets/50eea375-1538-45a2-965f-b25243c9db40" />
+
 Initial and final QA passes, human testing, independent review, TLC and acceptance are distinct stages. Do not remove sources or evidence before acceptance. Do not publish this personal build or add hosted authentication without reviewing provider requirements.
+
 
 ## Appearance and compact layouts
 
@@ -46,13 +49,13 @@ Choose Auto, Dark, or Light from the toolbar or View → Appearance. Auto follow
 
 For repeatable isolated layout checks, combine a task-owned TOKENLIGHT_PROFILE with TOKENLIGHT_DEMO=1 and TOKENLIGHT_WINDOW_SIZE=390x740 or 740x390. No layout override changes the default user profile.
 
-
 ## Restored development repository
 
 This repository restores the verified Tokenlight 0.2.0 source. The bundled Codex helper is stored with Git LFS. Install Git LFS and run `git lfs pull` after cloning before building. Use the pinned dependencies and build commands above. Personal credentials, app data, generated builds and the local Beads database are excluded from Git.
 
 Mac App Store feasibility is tracked locally in Beads as `tokenlight-fua`. All seven integrations are required; the investigation must establish provider-approved access and Apple App Sandbox compatibility before proposing release changes.
 
+<img width="1728" alt="Tokenlight Instruments" src="https://github.com/user-attachments/assets/92757d9b-9783-43d9-ad82-55a1c38218f4" />
 
 ## Ollama Cloud
 
@@ -68,6 +71,8 @@ Balances are independent of token totals and allowance percentages. Codex shows 
 
 Claude Code shows session, overall weekly, and Fable weekly allowances, plus Fable allowance value remaining. The current personal feed uses a private codename for the dollar-denominated Fable meter; Jared confirmed its provider UI label on October 31, 2026. This mapping requires the full dollar-allowance shape and may change with the provider interface. Fable allowance value is not billed cost and overlaps the overall usage limits.
 
+<img width="1728" alt="image" src="https://github.com/user-attachments/assets/5b67c31d-0348-4c53-8263-adde90b0270e" />
+
 Paid Claude usage and its monthly cap use the provider's explicit currency precision. A prepaid balance is shown only when the connection reports it; an absent balance is labeled unreported. These figures cover the current account period even when a historical activity month is selected. Claude subscription credits and Claude API billing are separate.
 
 The Anthropic API card reads model costs through the Analytics cost endpoint and distinguishes Fable from other models in details. API costs are after discounts and before credits, not net card charges. If cost access fails, token reporting continues with an explicit cost warning. OpenAI API, Anthropic API and Cursor connections do not currently expose prepaid balances through these adapters; no balance is inferred from a spending cap or token count.
@@ -77,6 +82,8 @@ The Anthropic API card reads model costs through the Analytics cost endpoint and
 OpenAI/Codex share teal, Anthropic/Claude share terracotta, Cursor is violet, ElevenLabs blue and Ollama gold. Original provider marks are bundled for offline use; see [mark provenance](docs/provider-marks.md). The colors continue through cards, connections, detail sheets and mini rows in both appearances.
 
 Resize the window to choose the layout automatically. Desktop windows use an aligned provider ledger with monthly totals, current allowance bars and credits, plus a daily source chart and model mileage. Shorter or narrower windows pack readings into tiles or compact rows. Below 360 pixels wide, at short heights, or in small windows, Mini uses a compact list with the same Overview, Accounts, API usage and Insights filters. The manual Mini/Full button is removed. View → Mini dashboard (⌘⇧M) remains an optional window-size preset. At the 260×180 minimum all seven rows fit; source detail sheets can scroll.
+
+<img width="841" alt="thin Tokenlight" src="https://github.com/user-attachments/assets/166cb09b-a4a4-4163-938f-e97587640690" />
 
 Mini's left metric is selected-month activity when reported, otherwise a current allowance percentage. `~` marks incomplete history. Its right metric is the first reported credit balance or allowance value, or explicitly labeled API cost. Hover or open a row for its meaning; other balances, reset passes, Cursor pools and Fable detail remain in the source sheet. A dash means unreported, not zero. Current allowances and balances remain current when viewing a historical month. Refresh, connections and color mode remain accessible in mini.
 
