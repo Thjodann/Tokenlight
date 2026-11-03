@@ -1,8 +1,8 @@
 {
   "app": "Tokenlight",
   "version": "0.6.4",
-  "sourceId": "94c774b33cdba599c066bbca4b3ae772d4ac0cda6c4f3ed5518d41e83c21f360",
-  "builtAt": "2026-11-03T00:27:36.658Z",
+  "sourceId": "2ed26dceffa9ea8cd8709c9ddead397da4f212a36f953b9b2254212e2bcb96dd",
+  "builtAt": "2026-11-03T00:31:00.241Z",
   "arch": "arm64",
   "platform": "darwin",
   "electron": "45.2.1",
@@ -82,7 +82,7 @@
     "docs/spending-and-insights.md": "68210eddcef3e7f965249d701495609bcf3365cf1ea6a8493b9deecf4b8b3e51",
     "package.json": "21e72833c840df472f6cf010ca9d5a7e3af19ecf0c19a2181a8253b085c9165e",
     "package-lock.json": "cc23319bd6b9a6e229b5fc239e62d768ea9e7c68d98100e4679ed1ac7b659a7e",
-    "README.md": "377942445897fd250d5b51b9a70c4645602783a95c579c0ad725a5bdcb7b0ba3",
+    "README.md": "19ba65238c10f7d57bc14da2e040f2f80bc1053c8ee6937a95aeaece3a04dd59",
     "THIRD-PARTY-NOTICES.md": "f8c70c87fe66d75f1e7322582708f76d693aa664a6d176d01b7fba52337d5105",
     "vendor/codex": "0b666f435a33c6e284c327f6894aedb8e93d7173419aff6c865f37f208c4b9ab",
     "vendor/CODEX-LICENSE.txt": "fada9cda895b67af092f74f75ba23230e8d4eeef3d06af394a1dc79093d10787"
