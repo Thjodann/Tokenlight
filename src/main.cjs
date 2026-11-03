@@ -150,14 +150,14 @@ class Service {
         try { return await retry; } finally { if (this.claudeReconnects.get(key) === retry) this.claudeReconnects.delete(key); }
       }
       if (!manual && this.errors[key]?.retryAt > Date.now()) return;
-      const recoveringClaude = sourceId === 'claude' && ['setup', 'auth'].includes(this.errors[key]?.code);
-      if (!manual && !recoveringClaude && !(sourceId === 'claude' && this.cache[key]?.sessionExpiresAt && this.cache[key].sessionExpiresAt <= Date.now()) && this.cache[key] && Date.now() - this.cache[key].lastUpdatedAt < (sourceId === 'cursor' ? 900000 : this.settings.refreshMinutes * 60000)) return;
+      const recoveringClaude = sourceId === 'claude' && ['setup', 'auth', 'session_refresh', 'credentials'].includes(this.errors[key]?.code);
+      if (!manual && !recoveringClaude && !(sourceId === 'claude' && this.cache[key]?.sessionExpiresAt && this.cache[key].sessionExpiresAt <= Date.now() + 120000) && this.cache[key] && Date.now() - this.cache[key].lastUpdatedAt < (sourceId === 'cursor' ? 900000 : this.settings.refreshMinutes * 60000)) return;
       const epoch = this.credentialEpochs[sourceId];
       const current = () => live() && this.credentialEpochs[sourceId] === epoch;
       const task = (async () => {
         this.busy.add(key); this.emit();
         try {
-          const result = await providers.readProvider(sourceId, month, { credentials, previousReading: this.cache[key], resourcePath: app.isPackaged ? process.resourcesPath : path.join(__dirname, '..'), allowKeychain: allowKeychain || !!this.settings.keychainAllowed[sourceId] });
+          const result = await providers.readProvider(sourceId, month, { credentials, previousReading: this.cache[key], statePath: this.dir, ownChildren, claudeLoginPending: !!this.claudeSignIn?.pending, resourcePath: app.isPackaged ? process.resourcesPath : path.join(__dirname, '..'), allowKeychain: allowKeychain || !!this.settings.keychainAllowed[sourceId] });
           if (!current()) return;
           this.cache[key] = { ...result, lastUpdatedAt: Date.now() }; delete this.errors[key];
           if (allowKeychain) { this.settings.keychainAllowed[sourceId] = true; await this.persist('settings.json', this.settings); }

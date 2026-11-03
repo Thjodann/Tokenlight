@@ -1,4 +1,4 @@
-# Claude Code session recovery (0.5.3)
+# Claude Code session maintenance
 
 Tokenlight uses the default Claude Code subscription profile. It reads current credentials on each request, with permission for Keychain access. A valid fallback at `~/.claude/.credentials.json` can replace an expired Keychain record. Tokenlight never stores access or refresh tokens in its cache, settings, exports, or build artifacts.
 
@@ -6,7 +6,7 @@ After a rejected request, Tokenlight rereads the credential stores, excludes the
 
 If Claude has not renewed its login, source details provide **Sign in to Claude Code**. This launches the installed official CLI with `auth login --claudeai`, keeps one login process, uses the CLI’s own browser flow with an explicit macOS browser opener, and refreshes usage after completion. The CLI runs in the app data directory with API/auth override variables removed and the default profile selected. The user reviews authorization on Claude’s own page. Tokenlight does not parse or recreate its OAuth links. Raw CLI output, OAuth state, codes, and secrets are never displayed or persisted. Failure/cancellation/timeout clears the pending UI with a useful message.
 
-Anthropic controls expiry and revocation. This repair prevents stale credential selection and missed renewal, but cannot make a provider login permanent. Claude Code 2.1.153 reported `loggedIn: true` from `claude auth status` while its access token was expired, so that command is not treated as live verification or a guaranteed refresh. Tokenlight does not perform a private refresh-token exchange or spend inference tokens to renew a session.
+Anthropic controls expiry and revocation. Credential selection and automatic maintenance prevent avoidable expiry interruptions, but cannot make a provider login permanent. Claude Code 2.1.153 reported `loggedIn: true` from `claude auth status` while its access token was expired, so that command is not treated as live verification or a guaranteed refresh. Tokenlight does not perform a private refresh-token exchange or spend inference tokens to renew a session. The installed official CLI owns refresh-token rotation and credential-store writes.
 
 References: [Claude authentication](https://code.claude.com/docs/en/authentication), [CLI reference](https://code.claude.com/docs/en/cli-reference).
 
@@ -16,4 +16,17 @@ Verification: credential-selection/rotation/error regression tests, actual servi
 
 ## Recovery after 0.6.4
 
-Connect remembers explicit Claude Keychain consent even if the first usage request fails. If Connect overlaps an older reading, it waits and performs one shared fresh attempt after failure instead of consuming the click on that older result. Auth/setup errors become due after one minute; an auth error cannot be hidden by a recently populated cache once that retry is due. Network failures and provider rate-limit backoff retain their existing behavior. These changes re-read existing credentials; they do not refresh provider OAuth grants, launch background login flows or submit inference requests.
+Connect remembers explicit Claude Keychain consent even if the first usage request fails. If Connect overlaps an older reading, it waits and performs one shared fresh attempt after failure instead of consuming the click on that older result. Auth/setup errors become due after one minute; an auth error cannot be hidden by a recently populated cache once that retry is due. Network failures and provider rate-limit backoff retain their existing behavior. The 0.6.5 changes only reread existing credentials. The subsequent overnight repair below adds session maintenance through the installed official CLI, without background browser login or inference requests.
+
+
+## Overnight expiry repair (2026-11-03)
+
+The reported 0.6.6 failure was a genuinely expired access token with a refresh credential still present. There was no alternate file credential. The previous reader checked the store twice and immediately required sign-in: it never asked Claude Code to renew. Starting the unmodified Claude Code 2.1.153 interactively, without any input, renewed the credential. The running Tokenlight app subsequently synced the new expiry on its normal scheduled refresh. CLI auth status and a print-mode initialize request did not demonstrate renewal.
+
+When a renewable credential is expired, or within two minutes of expiry, Tokenlight briefly starts the installed official CLI through macOS `script -q /dev/null`. Startup is interactive, with stdin disconnected, no initial prompt, tools/hooks/MCP disabled, user/project settings excluded and browser opening disabled. API/provider/profile overrides are removed. Tokenlight supplies no access/refresh token to this process: Claude reads and renews its own default profile. Terminal output is discarded, never interpreted as proof or retained in a transcript. Node's default input socket is incompatible with macOS script; stdin must be `ignore`.
+
+One maintenance attempt is shared across reporting months and windows. It stops when the credential identity changes to a valid session, or after 20 seconds, then terminates its owned process. Failed attempts have a one-minute cooldown. Near-expiry failure does not discard a still-valid access token. Temporary maintenance or locked-store failures preserve the last reading as stale and automatically retry; they are distinct from a missing login. Demo mode and existing Keychain consent gate the provider path. Active explicit sign-in suppresses new maintenance attempts.
+
+This is a version-specific CLI startup integration, not a documented refresh-only command or a promise that Anthropic will accept an expired/revoked grant. Recheck native startup when updating Claude Code. When the official CLI cannot renew a grant, the user may still need its normal sign-in flow. No expiry field is extended locally and no credential is copied into Tokenlight storage.
+
+Evidence is separated into synthetic reader/service regression tests, native macOS process-lifecycle checks, the actual expired-to-fresh credential observation, and a passive installed-app cache observation. A new packaged installation and an overnight soak of the repaired build remain separate delivery checks.

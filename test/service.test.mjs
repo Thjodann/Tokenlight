@@ -240,3 +240,23 @@ test('Claude queued recovery can join a newer refresh without awaiting itself', 
   releaseRetryLoad(); await new Promise(r => setImmediate(r)); releaseNewer();
   await Promise.all([initial, connect, newer]); assert.equal(calls, 2); assert.equal(service.snapshot().cards[0].monthly, 88);
 });
+
+test('near-expiry Claude sessions bypass a recent cache and receive maintenance context', async () => {
+  let calls = 0;
+  const service = createService({ loadCredentials: async () => ({}), readProvider: async (_id, _month, options) => {
+    calls++; assert.equal(options.statePath, '/fixture/profile'); assert.equal(typeof options.ownChildren.add, 'function'); assert.equal(options.claudeLoginPending, false);
+    return { monthly: 44, sessionExpiresAt: Date.now() + 3600000 };
+  } }, 'claude');
+  service.dir = '/fixture/profile'; service.settings.keychainAllowed.claude = true; service.emit = () => {};
+  service.cache['2026-10:claude'] = { monthly: 10, lastUpdatedAt: Date.now(), sessionExpiresAt: Date.now() + 60000 };
+  await service.refresh('claude'); assert.equal(calls, 1); assert.equal(service.snapshot().cards[0].monthly, 44);
+});
+
+test('temporary Claude renewal failures preserve the last reading and retry when due despite a recent cache', async () => {
+  class ProviderError extends Error { constructor() { super('Renewal delayed'); this.code = 'session_refresh'; this.retryAt = Date.now() - 1; } }
+  let calls = 0;
+  const service = createService({ ProviderError, loadCredentials: async () => ({}), readProvider: async () => { if (++calls === 1) throw new ProviderError(); return { monthly: 45 }; } }, 'claude');
+  service.emit = () => {}; service.cache['2026-10:claude'] = { monthly: 10, lastUpdatedAt: Date.now() };
+  await service.refresh('claude', true); assert.equal(service.snapshot().cards[0].monthly, 10); assert.equal(service.snapshot().cards[0].status, 'stale');
+  await service.refresh('claude'); assert.equal(calls, 2); assert.equal(service.snapshot().cards[0].monthly, 45);
+});

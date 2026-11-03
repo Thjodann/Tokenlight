@@ -1,6 +1,6 @@
 function loginEnvironment(environment) {
   const env = { ...environment, BROWSER: '/usr/bin/open' };
-  for (const key of Object.keys(env)) if (key.startsWith('ELECTRON_') || key.startsWith('ANTHROPIC_') || key.startsWith('CLAUDE_CODE_OAUTH_') || key === 'CLAUDE_CONFIG_DIR') delete env[key];
+  for (const key of Object.keys(env)) if (key.startsWith('ELECTRON_') || key.startsWith('ANTHROPIC_') || key.startsWith('CLAUDE_') || key === 'CLAUDECODE') delete env[key];
   return env;
 }
 function createClaudeLogin({ spawn, onState, onSuccess, ownChildren, environment, cwd, timeoutMs = 180000 }) {

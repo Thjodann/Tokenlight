@@ -5,7 +5,7 @@ import login from '../src/claude-login.cjs';
 const tick = () => new Promise(resolve => setImmediate(resolve));
 function harness(options = {}) {
   const states = [], children = [], ownChildren = new Set(); let successful = 0;
-  const controller = login.createClaudeLogin({ environment: { PATH: 'fixture-path', ELECTRON_RUN_AS_NODE: '1', ANTHROPIC_API_KEY: 'fixture-api', ANTHROPIC_AUTH_TOKEN: 'fixture-auth', CLAUDE_CODE_OAUTH_TOKEN: 'fixture-oauth', CLAUDE_CONFIG_DIR: 'fixture-profile' }, cwd: '/fixture/user-data',
+  const controller = login.createClaudeLogin({ environment: { PATH: 'fixture-path', ELECTRON_RUN_AS_NODE: '1', ANTHROPIC_API_KEY: 'fixture-api', ANTHROPIC_AUTH_TOKEN: 'fixture-auth', CLAUDE_CODE_OAUTH_TOKEN: 'fixture-oauth', CLAUDE_CONFIG_DIR: 'fixture-profile', CLAUDE_CODE_USE_BEDROCK: '1', CLAUDECODE: '1' }, cwd: '/fixture/user-data',
     spawn: (binary, args, opts) => { const child = new EventEmitter(); child.stdout = new EventEmitter(); child.kill = () => child.emit('exit', null); children.push({ child, binary, args, opts }); return child; },
     onState: state => states.push(state), onSuccess: async () => { successful++; }, ownChildren, ...options });
   return { controller, states, children, ownChildren, success: () => successful };
@@ -17,7 +17,7 @@ test('sign-in owns one official CLI process and automatically syncs after comple
   const { child, args, opts } = h.children[0];
   assert.deepEqual(args, ['auth', 'login', '--claudeai']);
   assert.equal(opts.env.BROWSER, '/usr/bin/open'); assert.equal(opts.env.PATH, 'fixture-path');
-  for (const key of ['ELECTRON_RUN_AS_NODE', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CONFIG_DIR']) assert.equal(opts.env[key], undefined);
+  for (const key of ['ELECTRON_RUN_AS_NODE', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDECODE']) assert.equal(opts.env[key], undefined);
   child.stdout.emit('data', 'fixture-private-oauth-output');
   child.emit('exit', 0); await tick();
   assert.equal(h.success(), 1); assert.equal(h.states.at(-1).pending, false); assert.equal(h.ownChildren.size, 0);

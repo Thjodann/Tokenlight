@@ -1,4 +1,5 @@
-import { selectClaudeSession, readClaudeUsage } from './claude-session.mjs';
+import { maintainClaudeSession } from './claude-maintenance.mjs';
+import { loadClaudeSession, readClaudeUsage } from './claude-session.mjs';
 import { cursorStoragePassword } from './cursor-storage.mjs';
 import { activityRow, aggregateActivity } from './activity.mjs';
 import { openaiCosts } from './openai-cost.mjs';
@@ -163,15 +164,20 @@ export async function claudeLocal(month, root = join(homedir(), '.claude/project
   return { daily, monthly: records.size ? daily.reduce((a, b) => a + b.value, 0) : null, partial, scannedFiles: files.length, modelUsage: aggregateActivity([...records.values()].map(r => r.activity)), requestCount: records.size || null };
 }
 async function claude(month, ctx) {
-  const load = async excludedToken => {
-    let keychain, fallback;
-    if (ctx.allowKeychain) {
-      try { const { stdout } = await exec('/usr/bin/security', ['find-generic-password', '-s', 'Claude Code-credentials', '-w'], { timeout: 15000, maxBuffer: 100000 }); keychain = JSON.parse(stdout).claudeAiOauth; } catch {}
-    }
-    try { fallback = JSON.parse(await readFile(join(homedir(), '.claude/.credentials.json'), 'utf8')).claudeAiOauth; } catch {}
-    return selectClaudeSession(keychain, fallback, Date.now(), excludedToken);
-  };
+  const load = excludedToken => loadClaudeSession({ ErrorType: ProviderError,
+    readKeychain: ctx.allowKeychain ? async () => {
+      const { stdout } = await exec('/usr/bin/security', ['find-generic-password', '-s', 'Claude Code-credentials', '-w'], { timeout: 15000, maxBuffer: 100000 });
+      return JSON.parse(stdout).claudeAiOauth;
+    } : null,
+    readFallback: async () => JSON.parse(await readFile(join(homedir(), '.claude/.credentials.json'), 'utf8')).claudeAiOauth
+  }, excludedToken);
   const { record, usage } = await readClaudeUsage({ load, ErrorType: ProviderError,
+    renew: ctx.allowKeychain ? async () => {
+      if (ctx.claudeLoginPending) throw new ProviderError('Finish the open Claude sign-in; Tokenlight will reconnect automatically.', 'session_refresh', Date.now() + 60000);
+      const result = await maintainClaudeSession({ load, cwd: ctx.statePath, ownChildren: ctx.ownChildren });
+      if (result.unavailable) throw new ProviderError('Install Claude Code to renew this session automatically, then choose Connect.', 'setup');
+      if (!result.renewed) throw new ProviderError('Claude’s session renewal is temporarily unavailable. Tokenlight will retry automatically; open Claude Code if this continues.', 'session_refresh', result.retryAt);
+    } : undefined,
     request: token => fetchJSON('https://api.anthropic.com/api/oauth/usage', { Authorization: `Bearer ${token}`, 'anthropic-beta': 'oauth-2025-04-20' }) });
   const result = normalizeClaude(usage), local = await claudeLocal(month);
   if (!result.windows.length && !result.creditBalances.length && !result.paidUsage) throw new ProviderError('Claude returned no allowance or credit measurement. Check your plan in its usage dashboard.', 'coverage');
