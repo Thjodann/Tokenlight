@@ -21,6 +21,8 @@ The build uses the pinned Electron and icon-renderer versions in package-lock.js
 npm start
 ```
 
+On macOS, the Tokenlight menu bar icon offers **Open Dashboard** and **Quit Tokenlight**. Closing the last window keeps monitoring running; Open Dashboard restores the main window or creates it again. Separate Dashboard windows remain independent. Use Quit Tokenlight or Command-Q to exit the app completely.
+
 The native app defaults to ~/secrets.env when it exists. Choose another file in Connections, or save individual keys with macOS secure storage. No secret values are copied from a secrets file into the app’s configuration or build. Supported names: OPENAI_ADMIN_KEY (or OPENAI_ADMIN_API_KEY or OPEN_AI_ADMIN_KEY), ANTHROPIC_ADMIN_KEY (or ANTHROPIC_ADMIN_API_KEY), ELEVENLABS_API_KEY. Ordinary API keys are detected as fallback credentials but may lack usage permissions.
 
 Codex uses its account RPC read methods. Cursor reads the local desktop session in memory and retrieves account-wide dashboard usage; this personal interface is not the public team API. Claude Code requires a real subscription login; Connect reads its local session. Where available, Claude tokens come from local Code logs and exclude other devices and remote sessions. Account allowance windows are reported separately. No adapter creates model requests or changes billing settings.

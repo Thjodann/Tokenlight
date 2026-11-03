@@ -55,20 +55,23 @@ test('main bootstrap keeps kiosk IPC read-only and display windows alive after m
   const vm = await import('node:vm');
   const model = await import('../src/model.mjs'), demoData = await import('../src/demo-data.mjs'), insights = await import('../src/insights.mjs');
   const require = createRequire(new URL('../src/main.cjs', import.meta.url));
-  const app = new EventEmitter(), windows = [], handlers = new Map(); let focused, menu, boot, timer;
+  const app = new EventEmitter(), windows = [], handlers = new Map(); let focused, menu, boot, timer, tray;
   Object.assign(app, { requestSingleInstanceLock: () => true, getVersion: () => 'test', getPath: () => '/fixture', setAccessibilitySupportEnabled() {}, quit() { this.didQuit = true; }, whenReady: () => ({ then(fn) { boot = fn(); } }) });
   class Window extends EventEmitter {
     constructor(options) { super(); this.options = options; this.destroyed = false; this.sent = []; this.webContents = new EventEmitter(); Object.assign(this.webContents, { mainFrame: {}, session: { setPermissionRequestHandler() {} }, setWindowOpenHandler() {}, send: (...args) => this.sent.push(args) }); windows.push(this); }
     static getFocusedWindow() { return focused; }
     isDestroyed() { return this.destroyed; }
+    isMinimized() { return false; }
+    focus() { focused = this; }
     getSize() { return [this.options.width, this.options.height]; }
     setBackgroundColor() {}
     async loadFile() {}
     show() { focused = this; this.emit('focus'); }
     close() { this.destroyed = true; if (focused === this) focused = undefined; this.emit('closed'); if (windows.every(w => w.destroyed)) app.emit('window-all-closed'); }
   }
+  class Tray { constructor() { tray = this; } setToolTip() {} setContextMenu(value) { this.menu = value; } destroy() {} }
   const items = template => template.flatMap(i => [i, ...items(i.submenu || [])]);
-  const electron = { app, BrowserWindow: Window, ipcMain: { handle: (key, fn) => handlers.set(key, fn) }, Menu: { buildFromTemplate: template => ({ template, getMenuItemById: id => items(template).find(i => i.id === id) }), setApplicationMenu: value => { menu = value; }, getApplicationMenu: () => menu }, nativeTheme: Object.assign(new EventEmitter(), { shouldUseDarkColors: true }), powerMonitor: new EventEmitter(), safeStorage: {}, dialog: {}, shell: {} };
+  const electron = { app, Tray, nativeImage: { createEmpty: () => ({ addRepresentation() {}, setTemplateImage() {} }) }, BrowserWindow: Window, ipcMain: { handle: (key, fn) => handlers.set(key, fn) }, Menu: { buildFromTemplate: template => ({ template, getMenuItemById: id => items(template).find(i => i.id === id) }), setApplicationMenu: value => { menu = value; }, getApplicationMenu: () => menu }, nativeTheme: Object.assign(new EventEmitter(), { shouldUseDarkColors: true }), powerMonitor: new EventEmitter(), safeStorage: {}, dialog: {}, shell: {} };
   const fakeFS = { mkdir: async () => {}, access: async () => { throw new Error('Absent'); }, readFile: async () => { throw new Error('Absent'); } };
   class ProviderError extends Error {}
   let source = await readFile(new URL('../src/main.cjs', import.meta.url), 'utf8');
@@ -93,5 +96,8 @@ test('main bootstrap keeps kiosk IPC read-only and display windows alive after m
   const reopened = windows.at(-1); assert.notEqual(reopened, kiosk);
   assert.equal((await call(reopened, 'get-snapshot')).value.presentation.dashboard, false);
   assert.equal(kiosk.isDestroyed(), false); reopened.close();
-  kiosk.close(); assert.equal(app.didQuit, true);
+  kiosk.close(); assert.equal(app.didQuit, undefined, "menu bar survives closing every window");
+  await tray.menu.template[0].click(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(windows.at(-1).isDestroyed(), false);
+  tray.menu.template[2].click(); assert.equal(app.didQuit, true);
 });

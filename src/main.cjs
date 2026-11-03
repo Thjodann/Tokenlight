@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, safeStorage, nativeTheme, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage, safeStorage, nativeTheme, powerMonitor } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const os = require('node:os');
@@ -10,11 +10,12 @@ const { cacheAllowed, reconcileCredentials } = require('./credential-cache.cjs')
 const { DashboardWindows } = require('./dashboard-windows.cjs');
 const dashboards = new DashboardWindows();
 const { createClaudeLogin } = require('./claude-login.cjs');
+const { mainDashboardOpener, createStatusBar } = require('./status-bar.cjs');
 
 if (process.env.TOKENLIGHT_PROFILE && path.isAbsolute(process.env.TOKENLIGHT_PROFILE)) app.setPath('userData', process.env.TOKENLIGHT_PROFILE);
 const single = app.requestSingleInstanceLock();
 if (!single) app.quit();
-let window, model, providers, service, layoutController, insights, demoData;
+let window, model, providers, service, layoutController, insights, demoData, statusBar;
 const ownChildren = new Set();
 app.on('second-instance', () => { if (window && !window.isDestroyed()) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } else if (service) app.emit('activate'); });
 app.on('before-quit', () => { for (const child of ownChildren) child.kill('SIGTERM'); });
@@ -252,17 +253,19 @@ app.whenReady().then(async () => {
       { id: 'mini-layout', label: 'Mini dashboard', accelerator: 'CmdOrCtrl+Shift+M', type: 'checkbox', checked: service.settings.layoutMode === 'mini', click: item => { const e = focused(); if (e && !e.dashboard) void service.setLayoutMode(item.checked ? 'mini' : 'dashboard'); } },
       { id: 'appearance-menu', label: 'Appearance', submenu: MODES.map(mode => ({ id: `appearance-${mode}`, label: mode === 'auto' ? 'Auto — follow system' : mode === 'dark' ? 'Dark' : 'Light', type: 'radio', checked: service.settings.colorMode === mode, click: () => { const e = focused(); if (e && !e.dashboard) void service.setColorMode(mode); } })) }, { role: 'togglefullscreen' }] }, { role: 'windowMenu' }
   ]));
-  await createWindow();
+  const openDashboard = mainDashboardOpener({ getWindow: () => window, createWindow: () => createWindow() });
+  await openDashboard();
+  statusBar = createStatusBar({ app, Tray, Menu, nativeImage, openDashboard });
   updateMenu(); service.emit(); service.refresh();
-  app.on('activate', () => { if (!window || window.isDestroyed()) void createWindow().catch(() => {}); else window.show(); });
+  app.on('activate', () => { void openDashboard().catch(() => {}); });
   const timer = setInterval(() => {
     const month = model.currentMonth();
     if (service.followCurrent) service.month = month;
     dashboards.rollover(month); service.emit();
-    for (const period of dashboards.months()) void service.refresh(null, false, false, period);
+    for (const period of new Set([service.month, ...dashboards.months()])) void service.refresh(null, false, false, period);
   }, 60000); timer.unref();
   if (process.env.TOKENLIGHT_SCREENSHOT) {
     setTimeout(async () => { const image = await window.webContents.capturePage(); await fs.writeFile(process.env.TOKENLIGHT_SCREENSHOT, image.toPNG()); if (process.env.TOKENLIGHT_QUIT_AFTER_CAPTURE) app.quit(); }, service.demo ? 1200 : 18000);
   }
 });
-app.on('window-all-closed', () => app.quit());
+app.on('window-all-closed', () => { if (!statusBar) app.quit(); });
