@@ -22,7 +22,7 @@ app.on('before-quit', () => { for (const child of ownChildren) child.kill('SIGTE
 const safeError = e => e instanceof providers.ProviderError ? e.message : 'Something interrupted this reading. Try again.';
 
 class Service {
-  constructor() { this.demo = process.argv.includes('--demo') || process.env.TOKENLIGHT_DEMO === '1'; this.demoAt = Date.now(); this.demoSeed = randomUUID(); this.modeEpoch = 0; this.month = model.currentMonth(); this.followCurrent = true; this.cache = {}; this.errors = {}; this.credentialScopes = {}; this.credentialEpochs = {}; this.busy = new Set(); this.inflight = new Map(); this.fileError = null; this.vault = {}; this.writeQueue = Promise.resolve(); }
+  constructor() { this.demo = process.argv.includes('--demo') || process.env.TOKENLIGHT_DEMO === '1'; this.demoAt = Date.now(); this.demoSeed = randomUUID(); this.modeEpoch = 0; this.month = model.currentMonth(); this.followCurrent = true; this.cache = {}; this.errors = {}; this.credentialScopes = {}; this.credentialEpochs = {}; this.busy = new Set(); this.inflight = new Map(); this.claudeReconnects = new Map(); this.fileError = null; this.vault = {}; this.writeQueue = Promise.resolve(); }
   async init() {
     this.dir = app.getPath('userData'); await fs.mkdir(this.dir, { recursive: true });
     const candidate = path.join(os.homedir(), 'secrets.env');
@@ -113,10 +113,15 @@ class Service {
     return this.snapshot();
   }
   emit() { dashboards.broadcast(month => this.snapshot(month)); }
-  async refresh(id = null, manual = false, allowKeychain = false, month = this.month) {
+  async refresh(id = null, manual = false, allowKeychain = false, month = this.month, afterInflight = false) {
     if (this.demo) { if (manual) this.randomizeDemo(); this.emit(); return this.snapshot(month); }
     const modeEpoch = this.modeEpoch, live = () => !this.demo && this.modeEpoch === modeEpoch;
     const ids = id ? [id] : model.SOURCES.map(s => s.id);
+    if (allowKeychain && id === 'claude' && !this.settings.keychainAllowed.claude) {
+      this.settings.keychainAllowed.claude = true;
+      await this.persist('settings.json', this.settings);
+      if (!live()) return this.snapshot(month);
+    }
     let credentials;
     try { credentials = await providers.loadCredentials(this.settings.secretsPath, this.vault); if (!live()) return this.snapshot(month); this.fileError = null; }
     catch (e) { if (!live()) return this.snapshot(month); this.fileError = safeError(e); credentials = { ...this.vault }; }
@@ -130,9 +135,23 @@ class Service {
     await Promise.allSettled(ids.map(async sourceId => {
       if (!live() || !model.SOURCES.some(s => s.id === sourceId)) return;
       const key = `${month}:${sourceId}`;
-      if (this.inflight.has(key)) return this.inflight.get(key);
+      if (this.inflight.has(key)) {
+        const previous = this.inflight.get(key);
+        if (sourceId !== 'claude' || !manual || afterInflight) return previous;
+        if (this.claudeReconnects.has(key)) return this.claudeReconnects.get(key);
+        // A Connect click must survive an older read that was already failing.
+        const retry = (async () => {
+          await previous;
+          if (!live() || !this.errors[key]) return;
+          if (this.errors[key].code === 'rate_limit' && this.errors[key].retryAt > Date.now()) return;
+          await this.refresh(sourceId, true, allowKeychain, month, true);
+        })();
+        this.claudeReconnects.set(key, retry);
+        try { return await retry; } finally { if (this.claudeReconnects.get(key) === retry) this.claudeReconnects.delete(key); }
+      }
       if (!manual && this.errors[key]?.retryAt > Date.now()) return;
-      if (!manual && !(sourceId === 'claude' && this.cache[key]?.sessionExpiresAt && this.cache[key].sessionExpiresAt <= Date.now()) && this.cache[key] && Date.now() - this.cache[key].lastUpdatedAt < (sourceId === 'cursor' ? 900000 : this.settings.refreshMinutes * 60000)) return;
+      const recoveringClaude = sourceId === 'claude' && ['setup', 'auth'].includes(this.errors[key]?.code);
+      if (!manual && !recoveringClaude && !(sourceId === 'claude' && this.cache[key]?.sessionExpiresAt && this.cache[key].sessionExpiresAt <= Date.now()) && this.cache[key] && Date.now() - this.cache[key].lastUpdatedAt < (sourceId === 'cursor' ? 900000 : this.settings.refreshMinutes * 60000)) return;
       const epoch = this.credentialEpochs[sourceId];
       const current = () => live() && this.credentialEpochs[sourceId] === epoch;
       const task = (async () => {
@@ -145,7 +164,7 @@ class Service {
           await this.persist('usage-cache.json', this.cache);
         } catch (e) {
           if (!current()) return;
-          this.errors[key] = { message: safeError(e), code: e.code || 'unavailable', retryAt: e.retryAt || (['setup', 'auth', 'file'].includes(e.code) ? Date.now() + 300000 : null) };
+          this.errors[key] = { message: safeError(e), code: e.code || 'unavailable', retryAt: e.retryAt || (['setup', 'auth', 'file'].includes(e.code) ? Date.now() + (sourceId === 'claude' ? 60000 : 300000) : null) };
         } finally { if (this.inflight.get(key) === task) { this.busy.delete(key); this.inflight.delete(key); } this.emit(); }
       })();
       this.inflight.set(key, task); return task;

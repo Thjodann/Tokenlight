@@ -146,3 +146,97 @@ test('independent dashboard periods share in-flight reads without moving the mai
   assert.equal(service.snapshot('2026-09').cards[0].monthly, 111);
   assert.equal(service.snapshot().cards[0].monthly, 222);
 });
+
+
+test('Claude Connect waits for an older failed refresh then retries once with consent', async () => {
+  class ProviderError extends Error { constructor() { super('renew sign-in'); this.code = 'setup'; } }
+  let started, release; const began = new Promise(r => { started = r; }), gate = new Promise(r => { release = r; });
+  const permissions = [];
+  const service = createService({ ProviderError, loadCredentials: async () => ({}), readProvider: async (_id, _month, options) => {
+    permissions.push(options.allowKeychain);
+    if (permissions.length === 1) { started(); await gate; throw new ProviderError(); }
+    return { monthly: 42 };
+  } }, 'claude');
+  service.emit = () => {};
+  const automatic = service.refresh('claude'); await began;
+  const connect = service.refresh('claude', true, true), repeated = service.refresh('claude', true, true);
+  await new Promise(r => setImmediate(r)); release(); await Promise.all([automatic, connect, repeated]);
+  assert.equal(service.snapshot().cards[0].status, 'ready');
+  assert.deepEqual(permissions, [false, true]);
+  assert.equal(service.settings.keychainAllowed.claude, true);
+});
+
+test('scheduled Claude recovery bypasses fresh-cache reuse after auth failure but respects retry time', async () => {
+  let calls = 0;
+  const service = createService({ loadCredentials: async () => ({}), readProvider: async () => { calls++; return { monthly: 99 }; } }, 'claude');
+  service.emit = () => {}; service.settings.keychainAllowed.claude = true;
+  service.cache['2026-10:claude'] = { monthly: 10, lastUpdatedAt: Date.now() };
+  service.errors['2026-10:claude'] = { code: 'setup', retryAt: Date.now() + 30000 };
+  await service.refresh('claude'); assert.equal(calls, 0);
+  service.errors['2026-10:claude'].retryAt = Date.now() - 1;
+  await service.refresh('claude'); assert.equal(calls, 1); assert.equal(service.snapshot().cards[0].monthly, 99);
+});
+
+
+test('failed Claude Connect retains consent and coalesces overlapping retry failures', async () => {
+  class ProviderError extends Error { constructor() { super('renew sign-in'); this.code = 'setup'; } }
+  let started, release, calls = 0; const began = new Promise(r => { started = r; }), gate = new Promise(r => { release = r; });
+  const service = createService({ ProviderError, loadCredentials: async () => ({}), readProvider: async () => {
+    if (++calls === 1) { started(); await gate; } throw new ProviderError();
+  } }, 'claude');
+  service.emit = () => {};
+  const initial = service.refresh('claude'); await began;
+  const before = Date.now(); const attempts = [service.refresh('claude', true, true), service.refresh('claude', true, true)];
+  await new Promise(r => setImmediate(r)); release(); await Promise.all([initial, ...attempts]);
+  assert.equal(calls, 2); assert.equal(service.settings.keychainAllowed.claude, true);
+  assert.ok(service.errors['2026-10:claude'].retryAt >= before + 60000);
+  assert.ok(service.errors['2026-10:claude'].retryAt < Date.now() + 61000);
+  assert.equal(service.claudeReconnects.size, 0); assert.equal(service.inflight.size, 0);
+});
+
+test('a queued Claude Connect cannot cross a Demo-mode boundary', async () => {
+  class ProviderError extends Error { constructor() { super('renew sign-in'); this.code = 'setup'; } }
+  let started, release, calls = 0; const began = new Promise(r => { started = r; }), gate = new Promise(r => { release = r; });
+  const service = createService({ ProviderError, loadCredentials: async () => ({}), readProvider: async () => {
+    calls++; started(); await gate; throw new ProviderError();
+  } }, 'claude');
+  service.emit = () => {}; service.snapshot = () => ({});
+  const initial = service.refresh('claude'); await began;
+  const connect = service.refresh('claude', true, true); await new Promise(r => setImmediate(r));
+  service.demo = true; service.modeEpoch++; service.inflight.clear(); service.busy.clear();
+  release(); await Promise.all([initial, connect]); assert.equal(calls, 1); assert.equal(service.claudeReconnects.size, 0);
+});
+
+test('queued Claude Connect honors rate-limit retry time from the older request', async () => {
+  class ProviderError extends Error { constructor() { super('wait'); this.code = 'rate_limit'; this.retryAt = Date.now() + 300000; } }
+  let started, release, calls = 0; const began = new Promise(r => { started = r; }), gate = new Promise(r => { release = r; });
+  const service = createService({ ProviderError, loadCredentials: async () => ({}), readProvider: async () => {
+    calls++; started(); await gate; throw new ProviderError();
+  } }, 'claude');
+  service.emit = () => {};
+  const initial = service.refresh('claude'); await began;
+  const connect = service.refresh('claude', true, true); await new Promise(r => setImmediate(r)); release();
+  await Promise.all([initial, connect]); assert.equal(calls, 1); assert.equal(service.errors['2026-10:claude'].code, 'rate_limit');
+});
+
+
+test('Claude queued recovery can join a newer refresh without awaiting itself', { timeout: 1000 }, async () => {
+  class ProviderError extends Error { constructor() { super('expired'); this.code = 'setup'; } }
+  let initialStarted, releaseInitial, retryLoading, releaseRetryLoad, newerStarted, releaseNewer;
+  const initialGate = new Promise(r => { releaseInitial = r; }), initialBegan = new Promise(r => { initialStarted = r; });
+  const loadGate = new Promise(r => { releaseRetryLoad = r; }), loadBegan = new Promise(r => { retryLoading = r; });
+  const newerGate = new Promise(r => { releaseNewer = r; }), newerBegan = new Promise(r => { newerStarted = r; });
+  let loads = 0, calls = 0;
+  const service = createService({ ProviderError, loadCredentials: async () => {
+    if (++loads === 3) { retryLoading(); await loadGate; } return {};
+  }, readProvider: async () => {
+    if (++calls === 1) { initialStarted(); await initialGate; throw new ProviderError(); }
+    newerStarted(); await newerGate; return { monthly: 88 };
+  } }, 'claude');
+  service.emit = () => {}; service.settings.keychainAllowed.claude = true;
+  const initial = service.refresh('claude'); await initialBegan;
+  const connect = service.refresh('claude', true, true); await new Promise(r => setImmediate(r)); releaseInitial();
+  await loadBegan; const newer = service.refresh('claude', true); await newerBegan;
+  releaseRetryLoad(); await new Promise(r => setImmediate(r)); releaseNewer();
+  await Promise.all([initial, connect, newer]); assert.equal(calls, 2); assert.equal(service.snapshot().cards[0].monthly, 88);
+});

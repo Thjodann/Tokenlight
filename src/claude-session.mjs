@@ -1,7 +1,7 @@
 // Credentials stay in Claude Code's stores; only the active request holds a token.
 const valid = (record, now = Date.now()) => !!record?.accessToken && (!record.expiresAt || Number(record.expiresAt) > now);
-export function selectClaudeSession(keychain, fallback, now = Date.now()) {
-  const records = [keychain, fallback];
+export function selectClaudeSession(keychain, fallback, now = Date.now(), excludedToken = null) {
+  const records = [keychain, fallback].filter(record => record?.accessToken !== excludedToken);
   return records.find(record => valid(record, now)) || records.find(record => record?.accessToken) || null;
 }
 
@@ -15,7 +15,7 @@ export async function readClaudeUsage({ load, request, ErrorType }) {
   try { return { record, usage: await request(record.accessToken) }; }
   catch (error) {
     if (error.code !== 'auth') throw error;
-    const renewed = await load();
+    const renewed = await load(record.accessToken);
     if (!valid(renewed) || renewed.accessToken === record.accessToken) throw reconnect();
     try { return { record: renewed, usage: await request(renewed.accessToken) }; }
     catch (retryError) { if (retryError.code === 'auth') throw reconnect(); throw retryError; }

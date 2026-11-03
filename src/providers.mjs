@@ -163,13 +163,13 @@ export async function claudeLocal(month, root = join(homedir(), '.claude/project
   return { daily, monthly: records.size ? daily.reduce((a, b) => a + b.value, 0) : null, partial, scannedFiles: files.length, modelUsage: aggregateActivity([...records.values()].map(r => r.activity)), requestCount: records.size || null };
 }
 async function claude(month, ctx) {
-  const load = async () => {
+  const load = async excludedToken => {
     let keychain, fallback;
     if (ctx.allowKeychain) {
       try { const { stdout } = await exec('/usr/bin/security', ['find-generic-password', '-s', 'Claude Code-credentials', '-w'], { timeout: 15000, maxBuffer: 100000 }); keychain = JSON.parse(stdout).claudeAiOauth; } catch {}
     }
     try { fallback = JSON.parse(await readFile(join(homedir(), '.claude/.credentials.json'), 'utf8')).claudeAiOauth; } catch {}
-    return selectClaudeSession(keychain, fallback);
+    return selectClaudeSession(keychain, fallback, Date.now(), excludedToken);
   };
   const { record, usage } = await readClaudeUsage({ load, ErrorType: ProviderError,
     request: token => fetchJSON('https://api.anthropic.com/api/oauth/usage', { Authorization: `Bearer ${token}`, 'anthropic-beta': 'oauth-2025-04-20' }) });

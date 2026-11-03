@@ -38,3 +38,12 @@ test('rate limits and network failures are not retried as token rotation', async
     assert.equal(reads, 1); assert.equal(requests, 1);
   }
 });
+
+
+test('a rejected unexpired Keychain credential can yield to the valid fallback without another Connect', async () => {
+  const rejected = { ...fresh, accessToken: 'fixture-rejected' }; const sent = [];
+  const result = await readClaudeUsage({ ErrorType: SessionError,
+    load: async exclude => selectClaudeSession(rejected, fresh, Date.now(), exclude),
+    request: async token => { sent.push(token); if (token === rejected.accessToken) throw new SessionError('denied', 'auth'); return { ok: true }; } });
+  assert.equal(result.usage.ok, true); assert.deepEqual(sent, [rejected.accessToken, fresh.accessToken]);
+});
