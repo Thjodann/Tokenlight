@@ -27,7 +27,7 @@ export function allowanceAmount(pool) {
 export function allowanceDial(pools) {
   const rings = pools.map((pool, index) => {
     const radius = 88 - index * (pools.length <= 3 ? 18 : 55 / Math.max(1, pools.length - 1));
-    return `<g class="allotment-ring" data-ring="${index}" data-percent="${pool.percent}"><title>${esc(pool.label)}: ${percentText(pool.percent)}% used</title>${dialSegments(pool.percent, radius).map(s => `<path class="allotment-track" d="${s.track}"/>${s.fill ? `<path class="allotment-fill" d="${s.fill}"/>` : ''}`).join('')}</g>`;
+    return `<g class="allotment-ring" data-ring="${index}" data-percent="${pool.percent}" stroke-width="${index === 0 ? 10.5 : index === pools.length - 1 ? 3 : 9}"><title>${esc(pool.label)}: ${percentText(pool.percent)}% used</title>${dialSegments(pool.percent, radius, index === 0 ? 12 : 1).map(s => `<path class="allotment-track" d="${s.track}"/>${s.fill ? `<path class="allotment-fill" d="${s.fill}"/>` : ''}`).join('')}</g>`;
   }).join('');
   const primary = pools[0];
   const label = primary ? primary.label.replace('5-hour session', '5-hour').replace(' · cycle', '').replace('Subscription cycle', 'This cycle') : 'Allowance';
