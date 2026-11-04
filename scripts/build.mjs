@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { signingConfig, signingPreflight, signOptions, verifySignedApp } from './signing.mjs';
 import { notarizeApp } from './notarize.mjs';
+import { INSTALLER_INPUTS } from './dmg.mjs';
 const root = fileURLToPath(new URL('..', import.meta.url));
 process.chdir(root);
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
@@ -43,6 +44,7 @@ async function hash(file) { const digest = createHash('sha256'); for await (cons
 const manifest = {};
 for (const dir of ['src', 'scripts', 'test', 'docs']) for (const file of (await readdir(dir)).sort()) if (/\.(mjs|cjs|html|css|md)$/.test(file)) manifest[`${dir}/${file}`] = await hash(`${dir}/${file}`);
 for (const file of ['package.json', 'package-lock.json', 'README.md', 'THIRD-PARTY-NOTICES.md', 'vendor/codex', 'vendor/CODEX-LICENSE.txt']) manifest[file] = await hash(file);
+for (const file of INSTALLER_INPUTS) manifest[file] = await hash(file);
 const sourceId = createHash('sha256').update(JSON.stringify(manifest)).digest('hex');
 const receipt = { app: pkg.productName, version: pkg.version, sourceId, builtAt: new Date().toISOString(), arch: 'arm64', platform: 'darwin', electron: pkg.devDependencies.electron, packaging: 'Electron documented app-bundle layout', codexVersion, files: manifest };
 await writeFile(join(vendor, 'source-receipt.json'), JSON.stringify(receipt, null, 2));

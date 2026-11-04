@@ -1,0 +1,31 @@
+{
+  "name": "Tokenlight DMG - flat token path, no text",
+  "humanApproval": "approved",
+  "generator": "Built-in Imagegen",
+  "source": "tokenlight-dmg-accents-v3.png",
+  "sha256": "5c62370ffdce5fc64a7dc690ed976e00117d02d73471f1e6b5a8644896878ded",
+  "background": "Transparent accents; preserve native Finder background",
+  "layout": {
+    "width": 800,
+    "height": 360,
+    "iconSize": 96,
+    "appPosition": [
+      190,
+      180
+    ],
+    "applicationsPosition": [
+      610,
+      180
+    ]
+  },
+  "pixelSize": [
+    1870,
+    841
+  ],
+  "retina": "Two TIFF representations: 800x360 (1x) and 1600x720 (2x), combined with tiffutil -cathidpicheck",
+  "approval": {
+    "by": "Jared",
+    "date": "2026-11-03",
+    "decision": "Looks great. Clean up temporary build files while keeping the final artifacts and rebuild archives, then finish building the signed and notarized DMG."
+  }
+}
