@@ -1,0 +1,11 @@
+#updates-dialog { max-width: 510px; }
+.update-version { font-variant-numeric: tabular-nums; font-weight: 600; }
+#update-message { min-height: 3em; color: var(--muted); }
+.update-preference { display: flex; align-items: flex-start; gap: 12px; padding: 18px 0; border-top: 1px solid var(--line); }
+.update-preference input { margin-top: 4px; accent-color: var(--accent); }
+.update-preference small { display: block; margin-top: 5px; line-height: 1.5; color: var(--muted); }
+.update-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.update-indicator { color: var(--accent); font-size: 12px; }
+html[data-dashboard="true"] .update-indicator { display: none; }
+
+@media(max-width:620px){.update-indicator{width:28px;min-width:28px;padding:0;font-size:0}.update-indicator:before{content:"↥";font-size:17px}}

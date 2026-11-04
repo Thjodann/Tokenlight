@@ -16,7 +16,7 @@ function mainDashboardOpener({ getWindow, createWindow }) {
   };
 }
 
-function createStatusBar({ app, Tray, Menu, nativeImage, openDashboard, platform = process.platform }) {
+function createStatusBar({ app, Tray, Menu, nativeImage, openDashboard, updateItems = () => [], platform = process.platform }) {
   if (platform !== 'darwin') return null;
   const image = nativeImage.createEmpty();
   for (const [index, png] of require('./status-icon.cjs').entries()) {
@@ -25,11 +25,13 @@ function createStatusBar({ app, Tray, Menu, nativeImage, openDashboard, platform
   image.setTemplateImage(true);
   const tray = new Tray(image);
   tray.setToolTip('Tokenlight');
-  tray.setContextMenu(Menu.buildFromTemplate([
+  tray.updateMenu = () => tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Open Dashboard', click: () => { void openDashboard().catch(() => {}); } },
     { type: 'separator' },
+    ...updateItems(),
     { label: 'Quit Tokenlight', click: () => app.quit() }
   ]));
+  tray.updateMenu();
   app.once('will-quit', () => tray.destroy());
   return tray;
 }

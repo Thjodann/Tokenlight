@@ -73,7 +73,7 @@ test('main bootstrap keeps kiosk IPC read-only and display windows alive after m
   }
   class Tray { constructor() { tray = this; } setToolTip() {} setContextMenu(value) { this.menu = value; } destroy() {} }
   const items = template => template.flatMap(i => [i, ...items(i.submenu || [])]);
-  const electron = { app, Tray, nativeImage: { createEmpty: () => ({ addRepresentation() {}, setTemplateImage() {} }) }, BrowserWindow: Window, ipcMain: { handle: (key, fn) => handlers.set(key, fn) }, Menu: { buildFromTemplate: template => ({ template, getMenuItemById: id => items(template).find(i => i.id === id) }), setApplicationMenu: value => { menu = value; }, getApplicationMenu: () => menu }, nativeTheme: Object.assign(new EventEmitter(), { shouldUseDarkColors: true }), powerMonitor: new EventEmitter(), safeStorage: {}, dialog: {}, shell: {} };
+  const electron = { app, autoUpdater: new EventEmitter(), Tray, nativeImage: { createEmpty: () => ({ addRepresentation() {}, setTemplateImage() {} }) }, BrowserWindow: Window, ipcMain: { handle: (key, fn) => handlers.set(key, fn) }, Menu: { buildFromTemplate: template => ({ template, getMenuItemById: id => items(template).find(i => i.id === id) }), setApplicationMenu: value => { menu = value; }, getApplicationMenu: () => menu }, nativeTheme: Object.assign(new EventEmitter(), { shouldUseDarkColors: true }), powerMonitor: new EventEmitter(), safeStorage: {}, dialog: {}, shell: {} };
   const fakeFS = { mkdir: async () => {}, access: async () => { throw new Error('Absent'); }, readFile: async () => { throw new Error('Absent'); } };
   class ProviderError extends Error {}
   let source = await readFile(new URL('../src/main.cjs', import.meta.url), 'utf8');
@@ -88,7 +88,7 @@ test('main bootstrap keeps kiosk IPC read-only and display windows alive after m
   assert.equal((await call(main, 'new-dashboard-window')).ok, true);
   const kiosk = windows[1], display = (await call(kiosk, 'get-snapshot')).value;
   assert.equal(display.presentation.view, 'api'); assert.equal(display.month, '2026-10'); assert.equal(display.presentation.dashboard, true);
-  for (const channel of ['set-appearance', 'set-layout', 'set-account-profile', 'refresh', 'set-month', 'save-key', 'set-target', 'choose-secrets', 'open-provider', 'connect', 'demo', 'sign-in-claude', 'export', 'new-dashboard-window']) {
+  for (const channel of ['set-appearance', 'set-layout', 'set-account-profile', 'refresh', 'set-month', 'save-key', 'set-target', 'choose-secrets', 'open-provider', 'connect', 'demo', 'sign-in-claude', 'export', 'new-dashboard-window', 'check-updates', 'set-auto-updates', 'restart-update', 'open-release-notes']) {
     assert.equal((await call(kiosk, channel)).ok, false, `${channel} must reject a kiosk caller before doing work`);
   }
   const switched = await call(kiosk, 'set-window-view', 'account');
@@ -109,5 +109,5 @@ test('main bootstrap keeps kiosk IPC read-only and display windows alive after m
   kiosk.close(); assert.equal(app.didQuit, undefined, "menu bar survives closing every window");
   await tray.menu.template[0].click(); await new Promise(resolve => setImmediate(resolve));
   assert.equal(windows.at(-1).isDestroyed(), false);
-  tray.menu.template[2].click(); assert.equal(app.didQuit, true);
+  tray.menu.template.find(item => item.label === 'Quit Tokenlight').click(); assert.equal(app.didQuit, true);
 });

@@ -122,6 +122,7 @@ function render() {
     const control = e.target;
     if (!value?.cards && control) control.value = snapshot.month;
   });
+  renderUpdates();
   if ($('#connections-dialog').open) renderConnections();
   if ($('#details-dialog').open && !detailDirty && !$('#details-content').contains(document.activeElement)) renderDetails();
   if (wasMain && !document.querySelector('dialog[open]')) {
@@ -129,6 +130,18 @@ function render() {
     restore?.focus({ preventScroll: true });
   }
 }
+function renderUpdates() {
+  const s = snapshot?.updates; if (!s) return;
+  const dashboard = snapshot.presentation?.dashboard;
+  $('#update-ready').hidden = dashboard || s.status !== 'ready';
+  $('#update-version').textContent = `Version ${s.currentVersion}${s.version ? ` → ${s.version}` : ''}`;
+  $('#update-message').textContent = s.message;
+  $('#automatic-updates').checked = s.automatic;
+  $('#automatic-updates').disabled = s.status === 'unavailable';
+  $('#check-updates').disabled = ['unavailable', 'checking', 'downloading', 'ready', 'restarting'].includes(s.status);
+  $('#restart-update').hidden = s.status !== 'ready';
+}
+function showUpdates() { if (snapshot?.presentation?.dashboard) return; renderUpdates(); if (!$('#updates-dialog').open) $('#updates-dialog').showModal(); }
 function renderConnections() {
   $('#secrets-path').textContent = snapshot.demo ? 'Hidden in Demo mode' : snapshot.settings.secretsPath || 'No file selected';
   $('#choose-secrets').disabled = snapshot.demo;
@@ -194,6 +207,11 @@ wideQuery.addEventListener('change', () => render());
 desktopQuery.addEventListener('change', () => render());
 new ResizeObserver(fitInstruments).observe($('#main'));
 $('.brand-symbol').innerHTML = brandMark();
+$('#update-ready').addEventListener('click', showUpdates);
+$('#check-updates').addEventListener('click', () => run(() => api.checkUpdates()));
+$('#restart-update').addEventListener('click', () => run(() => api.restartUpdate()));
+$('#release-notes').addEventListener('click', () => run(() => api.releaseNotes()));
+$('#automatic-updates').addEventListener('change', async () => { const value = $('#automatic-updates').checked; await run(() => api.automaticUpdates(value)); renderUpdates(); });
 $('#connections-button').addEventListener('click', showConnections);
 $('#appearance-mode').addEventListener('change', () => run(() => api.appearance($('#appearance-mode').value)));
 $('#refresh-button').addEventListener('click', () => run(() => api.refresh()));
@@ -203,5 +221,5 @@ $('#demo-randomize').addEventListener('click', () => run(() => api.refresh()));
 for (const d of document.querySelectorAll('dialog')) d.addEventListener('click', e => { if (e.target === d) { const r = d.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) d.close(); } });
 $('#details-dialog').addEventListener('close', () => { const host = $('#connections-dialog').open ? $('#connections-dialog') : $('#main'); [...host.querySelectorAll(`[data-action="details"][data-id="${selected}"]`)].find(el => el.getClientRects().length)?.focus({ preventScroll: true }); });
 $('#connections-dialog').addEventListener('close', () => $('#connections-button').focus({ preventScroll: true }));
-try { update(await api.snapshot()); api.onSnapshot(update); api.onConnections(showConnections); }
+try { update(await api.snapshot()); api.onSnapshot(update); api.onConnections(showConnections); api.onUpdates(showUpdates); }
 catch { $('#main').innerHTML = '<h1>Couldn’t start Tokenlight</h1><p class="page-description">Close and reopen the app to try again.</p>'; }

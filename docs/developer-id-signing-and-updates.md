@@ -2,6 +2,54 @@
 
 Research and local audit: 2026-11-02. Baseline: Tokenlight 0.6.5, commit 4588a8ca692b3cf7c68c58857b34a9941d96f79f. Research only; no certificate creation, account changes, software signing, submission, install or release in this pass.
 
+## Setup implementation — 2026-11-03
+
+The owner selected **Aurelius Games LLC**, team `4JP4HKB6SJ`. The Apple website confirmed active paid organization membership and Account Holder access. The owner issued a G2 Developer ID Application certificate using the Keychain-generated public CSR. Its public key matches that CSR, and importing the public certificate made the matching private-key signing identity available locally. No private key was exported and no Keychain access policy was changed. Earlier Xcode-disabled and missing-certificate observations are historical.
+
+Verified identity: `Developer ID Application: Aurelius Games LLC (4JP4HKB6SJ)`, SHA-1 selector `D152C8089CE2E5C6E22505DA9F83C668F564B613`, expires **2027-12-03 17:46:31 UTC**. The owner saved the named `tokenlight-notary` profile, and authentication validated with Apple. Actual nested signing, notarization, staple validation, Gatekeeper assessment, a clean signed rebuild and all seven signed-app live reads passed. An isolated copy of the encrypted vault loaded without a warning. Applications installation migration and updater tests remain separate.
+
+The builder now has two explicit modes:
+
+- `npm run build` retains local ad hoc signing.
+- `npm run build:release` requires a valid Developer ID Application identity for the selected team and a validated named notarytool Keychain profile. It signs the staged app with pinned `@electron/osx-sign` 2.7.2, verifies nested Mach-O code, submits to Apple, records the submission ID before waiting, retains the log, staples the accepted ticket, validates it and runs Gatekeeper assessment before creating the final ZIP. Failures never fall back to ad hoc signing.
+
+One-time secure notarization setup, run by the owner in Terminal:
+
+```sh
+npm run notary:setup
+```
+
+The helper asks for the Apple Account email and Team ID, then lets Apple's own secure prompt collect the app-specific password and validate the local `tokenlight-notary` Keychain profile. It does not write the password to source, arguments, command history, reports or artifacts. Generate the app-specific password through [Apple Account](https://account.apple.com/); keep its creation and entry in the owner's hands.
+
+Supply the following non-secret selectors at build time (the identity is the full certificate name or SHA-1 fingerprint; it is not a private key):
+
+```sh
+export TOKENLIGHT_SIGNING_IDENTITY='Developer ID Application: COMPANY (TEAM_ID)'
+export TOKENLIGHT_TEAM_ID='TEAM_ID'
+export TOKENLIGHT_NOTARY_PROFILE='tokenlight-notary'
+npm run signing:check
+npm run check
+npm test
+npm run build:release
+npm run archive
+```
+
+Use a fresh `TOKENLIGHT_OUTPUT_DIR` for each attempt. Source manifests and the rebuild archive retain canonical input hashes; the external build receipt separately records `bundledCodexInputSha256`, shipped `bundledCodexSha256`, team, notarization result and verified code-object count. Signing affects the staged helper only. Rebuilding requires the same inputs and valid local signing credentials; timestamped signatures and notarization are not byte-reproducible.
+
+If waiting times out, retain the output directory and inspect the recorded ID with `xcrun notarytool info ID --keychain-profile tokenlight-notary`; wait on that same ID rather than uploading again. If Apple accepted it, finish stapling/validation and final packaging under the existing delivery workflow. The builder refuses existing submission receipts, logs and archives before Keychain access or upload. If waiting returns an error, it queries that same submission once so a rejection can retain its diagnostic log. Do not replace the published 0.6.8 archives with this setup build.
+
+The signing prerequisite is verified by two accepted notarizations and a clean archive rebuild with all 158 tests passing. Source identity: `ce079b4ae2243152576280377e0adb7108adefe82ff705b7409be34cc77ebf7f`. Evidence and current package links are in `.codex/output/developer-id-setup/FINAL-QA.md` and `delivery-receipt.json`. The original notarized ZIP launched independently, refreshed all seven integrations and rendered main/child Dashboard windows. The installed app and published release assets remain unchanged. Actual downloaded/quarantined installation, offline launch, normal-profile migration and the signed A-to-B updater test remain separate acceptance items.
+
+## In-app updater implementation — 2026-11-03
+
+Tokenlight 0.6.9 adds the built-in Electron `autoUpdater` without a new runtime dependency. Only packaged Developer ID release builds enable it; local ad hoc and development builds show the unavailable state. The feed is fixed in the main process to `https://update.electronjs.org/Thjodann/Tokenlight/darwin-arm64/APP_VERSION`. No renderer input, settings field or environment variable can redirect production updates. Provider keys, usage and account identifiers are not sent to the feed. Squirrel.Mac verifies incoming code signatures; release builds must continue using the stable bundle ID and intended Developer ID team.
+
+Automatic downloads default on, check 30 seconds after startup and every six hours, and can be disabled in the Updates dialog. A manual check remains available. Concurrent checks coalesce while checking/downloading; a ready download is retained. Tokenlight never invokes installation on download completion. The app and menu-bar menus expose Check for Updates and Update Ready/Restart to Update. Restart requires a confirmation whose default is Later; settings writes finish before calling `quitAndInstall`. A downloaded update otherwise installs on the next launch. Popout content has no update indicator or controls. Native network/server errors are reduced to a safe retry message.
+
+Verify with `npm run check` and `npm test`. The local fixture server `node scripts/verify-update.mjs APP_ZIP VERSION OUTPUT_DIR [PORT]` binds only 127.0.0.1 and serves the Squirrel response/ZIP. It is test tooling, not a production endpoint. Feed mode is controlled by OUTPUT_DIR/feed-mode.txt: update, none, offline, or bad (requires an intentionally invalid OUTPUT_DIR/bad.zip). Requests record path/method/time only. Use source copies for QA-only profile, bundle-ID, local feed and localhost ATS variations; never add those variations to a production build. Preserve actual notarization, native replacement and live connection evidence separately from unit tests.
+
+The existing installed/public 0.6.8 has no updater. The first signed updater-enabled version requires a manual install. Publishing a verified newer release supplies updates; pushing source or publishing a draft alone does not. Keep published historical versions immutable. Signed A-to-B verification and the final evidence boundary are recorded in `.codex/output/in-app-updates/QA.md` when complete; no production-feed or installation acceptance is implied by this implementation description.
+
 ## Decision
 
 Direct distribution is feasible. Retain Tokenlight's manual packaging and verified rebuild archive workflow, add an explicit Developer ID release mode using Electron's maintained signing/notarization libraries, then implement the built-in Electron updater. This is a recommendation, not an implemented pipeline. macOS automatic updates require a signed application. [Electron autoUpdater](https://www.electronjs.org/docs/latest/api/auto-updater)
