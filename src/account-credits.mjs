@@ -26,7 +26,7 @@ export function claudeCredits(usage) {
   const fable = usage.seven_day_fable ?? usage.iguana_necktie;
   const fableLimit = creditNumber(fable?.limit_dollars), fableUsed = creditNumber(fable?.used_dollars), fableRemaining = creditNumber(fable?.remaining_dollars);
   const fableShape = fableLimit != null && fableUsed != null && fableRemaining != null && Number.isFinite(Date.parse(fable?.resets_at));
-  if (fableShape) creditBalances.push({ label: 'Fable allowance remaining', value: fableRemaining, unit: 'USD', allowance: true, resetsAt: Date.parse(fable.resets_at), used: fableUsed, limit: fableLimit });
+  if (fableShape) creditBalances.push({ label: 'Fable weekly meter · remaining', pool: 'fable', value: fableRemaining, unit: 'USD', allowance: true, resetsAt: Date.parse(fable.resets_at), used: fableUsed, limit: fableLimit });
   const spend = usage.spend, legacy = usage.extra_usage;
   let used = readMoney(spend?.used), limit = readMoney(spend?.limit), balance = readMoney(spend?.balance?.money ?? spend?.balance);
   const legacyMoney = value => readMoney({ amount_minor: value, exponent: legacy?.decimal_places, currency: legacy?.currency });

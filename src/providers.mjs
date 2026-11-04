@@ -1,3 +1,4 @@
+import { readClaudeProfile } from './claude-profile.mjs';
 import { maintainClaudeSession } from './claude-maintenance.mjs';
 import { loadClaudeSession, readClaudeUsage } from './claude-session.mjs';
 import { cursorStoragePassword } from './cursor-storage.mjs';
@@ -179,9 +180,10 @@ async function claude(month, ctx) {
       if (!result.renewed) throw new ProviderError('Claude’s session renewal is temporarily unavailable. Tokenlight will retry automatically; open Claude Code if this continues.', 'session_refresh', result.retryAt);
     } : undefined,
     request: token => fetchJSON('https://api.anthropic.com/api/oauth/usage', { Authorization: `Bearer ${token}`, 'anthropic-beta': 'oauth-2025-04-20' }) });
+  const account = await readClaudeProfile(record, token => fetchJSON('https://api.anthropic.com/api/oauth/profile', { Authorization: `Bearer ${token}`, 'anthropic-beta': 'oauth-2025-04-20' }));
   const result = normalizeClaude(usage), local = await claudeLocal(month);
   if (!result.windows.length && !result.creditBalances.length && !result.paidUsage) throw new ProviderError('Claude returned no allowance or credit measurement. Check your plan in its usage dashboard.', 'coverage');
-  return { ...result, ...local, partial: true, plan: record.subscriptionType ?? 'Max', sessionExpiresAt: Number(record.expiresAt) || null, scope: identity(record.accessToken), sourceLabel: 'Claude Code account connection', coverage: 'Tokens from local Code logs only · UTC. Allowances are account-wide.', connectionNote: 'The personal account interface may change. Local token history excludes other devices and remote sessions.' };
+  return { ...result, ...local, ...account, partial: true, sessionExpiresAt: Number(record.expiresAt) || null, scope: identity(record.accessToken), sourceLabel: 'Claude Code account connection', coverage: 'Tokens from local Code logs only · UTC. Allowances are account-wide.', connectionNote: 'The personal account interface may change. Local token history excludes other devices and remote sessions.' };
 }
 async function apiUsage(id, month, ctx) {
   const key = ctx.credentials[id];

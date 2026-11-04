@@ -23,7 +23,7 @@ test('display readings keep zero, missing, stale, credit cap and separate allowa
   const html = dashboardView(s);
   assert.match(html, /0 tok/); assert.match(html, /Stale reading/);
   assert.match(html, /Cap reached/); assert.match(html, /paid usage unavailable/);
-  assert.match(html, /Fable allowance remaining/); assert.match(html, /allowance value, not a charge/); assert.match(html, /~7\.47M tok/);
+  assert.match(html, /Fable weekly meter/); assert.match(html, /allowance value, not a charge/); assert.match(html, /~7\.47M tok/);
   assert.match(html, /Grok \/ Composer/); assert.match(html, /Third-party models/);
 });
 test('provider strings are escaped in passive display markup', () => {
