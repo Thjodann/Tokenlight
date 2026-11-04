@@ -3,6 +3,9 @@ async function invoke(channel, ...args) { const result = await ipcRenderer.invok
 contextBridge.exposeInMainWorld('tokenlight', {
   viewState: view => invoke('set-window-view', view), newDashboard: () => invoke('new-dashboard-window'),
   snapshot: () => invoke('get-snapshot'), refresh: id => invoke('refresh', id), month: value => invoke('set-month', value),
+  checkUpdates: () => invoke('check-updates'), restartUpdate: () => invoke('restart-update'),
+  automaticUpdates: enabled => invoke('set-auto-updates', enabled), releaseNotes: () => invoke('open-release-notes'),
+  onUpdates: callback => { const listener = () => callback(); ipcRenderer.on('show-updates', listener); return () => ipcRenderer.removeListener('show-updates', listener); },
   appearance: mode => invoke('set-appearance', mode),
   layout: mode => invoke('set-layout', mode),
   accountProfile: (id, value) => invoke('set-account-profile', id, value),

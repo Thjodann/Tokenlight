@@ -107,7 +107,7 @@ test('a demo export stays synthetic if live mode resumes while its save dialog i
   let save, release, chosenName;
   const written = [], dialog = new Promise(resolve => { release = resolve; });
   const start = main.indexOf("  handle('export', async (_entry) => {");
-  const end = main.indexOf('\n  Menu.setApplicationMenu', start);
+  const end = main.indexOf('\n  const showUpdates', start);
   assert.ok(start > 0 && end > start);
   vm.runInNewContext(main.slice(start, end), {
     handle: (_channel, handler) => { save = handler; }, service, insights, window: {},

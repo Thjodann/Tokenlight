@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage, safeStorage, nativeTheme, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage, safeStorage, nativeTheme, powerMonitor, autoUpdater } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const os = require('node:os');
@@ -11,11 +11,12 @@ const { DashboardWindows } = require('./dashboard-windows.cjs');
 const dashboards = new DashboardWindows();
 const { createClaudeLogin } = require('./claude-login.cjs');
 const { mainDashboardOpener, createStatusBar } = require('./status-bar.cjs');
+const { Updates, updateMenuItems, RELEASES } = require('./updater.cjs');
 
 if (process.env.TOKENLIGHT_PROFILE && path.isAbsolute(process.env.TOKENLIGHT_PROFILE)) app.setPath('userData', process.env.TOKENLIGHT_PROFILE);
 const single = app.requestSingleInstanceLock();
 if (!single) app.quit();
-let window, model, providers, service, layoutController, insights, demoData, statusBar;
+let window, model, providers, service, layoutController, insights, demoData, statusBar, updates;
 const ownChildren = new Set();
 app.on('second-instance', () => { if (window && !window.isDestroyed()) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } else if (service) app.emit('activate'); });
 app.on('before-quit', () => { for (const child of ownChildren) child.kill('SIGTERM'); });
@@ -27,8 +28,9 @@ class Service {
     this.dir = app.getPath('userData'); await fs.mkdir(this.dir, { recursive: true });
     const candidate = path.join(os.homedir(), 'secrets.env');
     let defaultPath = null; try { await fs.access(candidate); defaultPath = candidate; } catch {}
-    this.settings = { secretsPath: defaultPath, targets: {}, refreshMinutes: 5, keychainAllowed: {}, colorMode: 'auto', ...await this.read('settings.json', {}) };
+    this.settings = { secretsPath: defaultPath, targets: {}, refreshMinutes: 5, automaticUpdates: true, keychainAllowed: {}, colorMode: 'auto', ...await this.read('settings.json', {}) };
     this.demo ||= this.settings.demoMode === true;
+    this.settings.automaticUpdates = this.settings.automaticUpdates !== false;
     this.settings.colorMode = normalizeColorMode(this.settings.colorMode);
     this.settings.layoutMode = normalizeLayout(this.settings.layoutMode);
     this.cache = await this.read('usage-cache.json', {});
@@ -51,7 +53,7 @@ class Service {
       return { ...source, ...(showCache ? cached : {}), status: this.busy.has(key) ? 'refreshing' : error ? showCache ? 'stale' : 'setup' : showCache ? 'ready' : 'unconnected', error: error?.message || null, errorCode: error?.code, retryAt: error?.retryAt,
         monthlyTarget: this.settings.targets[source.id] || null };
     });
-    return { month, demo: this.demo, cards, version: app.getVersion(), updatedAt: Date.now(), fileError: this.demo ? null : this.fileError, vaultError: this.demo ? null : this.vaultError,
+    return { updates: updates?.snapshot() || null, month, demo: this.demo, cards, version: app.getVersion(), updatedAt: Date.now(), fileError: this.demo ? null : this.fileError, vaultError: this.demo ? null : this.vaultError,
       claudeSignIn: this.demo ? null : this.claudeSignIn || null, appearance: { dark: nativeTheme.shouldUseDarkColors },
       settings: sample ? demoData.demoSettings(this.settings, sample) : { secretsPath: this.settings.secretsPath, refreshMinutes: this.settings.refreshMinutes, colorMode: this.settings.colorMode, layoutMode: this.settings.layoutMode, accountProfiles: this.settings.accountProfiles || {}, targets: this.settings.targets, savedKeys: Object.keys(this.vault) } };
   }
@@ -89,6 +91,16 @@ class Service {
       return this.snapshot();
     });
     return this.demoWrites;
+  }
+  async setAutomaticUpdates(enabled) {
+    if (typeof enabled !== 'boolean') throw new Error('Choose whether automatic updates are on or off.');
+    this.updateWrites = (this.updateWrites || Promise.resolve()).catch(() => {}).then(async () => {
+      const previous = this.settings.automaticUpdates; this.settings.automaticUpdates = enabled;
+      try { await this.persist('settings.json', this.settings); }
+      catch (error) { this.settings.automaticUpdates = previous; throw error; }
+      updates.setAutomatic(enabled); this.emit(); return this.snapshot();
+    });
+    return this.updateWrites;
   }
   async setLayoutMode(mode) {
     if (!LAYOUTS.includes(mode)) throw new Error('Choose Dashboard or Mini.');
@@ -196,6 +208,10 @@ app.whenReady().then(async () => {
   app.setAccessibilitySupportEnabled(true);
   [model, providers, insights, demoData] = await Promise.all([import('./model.mjs'), import('./providers.mjs'), import('./insights.mjs'), import('./demo-data.mjs')]);
   service = new Service(); await service.init();
+  updates = new Updates({ native: autoUpdater, version: app.getVersion(), enabled: app.isPackaged && process.platform === 'darwin' && require('../package.json').tokenlightUpdates === true,
+    automatic: service.settings.automaticUpdates, beforeRestart: async () => { await service.writeQueue; for (const child of ownChildren) child.kill('SIGTERM'); } });
+  app.on('before-quit', () => updates.stop());
+  autoUpdater.on('before-quit-for-update', () => { for (const child of ownChildren) child.kill('SIGTERM'); });
   applyColorMode(service.settings.colorMode, nativeTheme);
   const focused = () => dashboards.entries.get(BrowserWindow.getFocusedWindow()?.webContents);
   const updateMenu = () => {
@@ -228,6 +244,9 @@ app.whenReady().then(async () => {
     } catch (e) { return { ok: false, error: e instanceof providers.ProviderError || ['save-key', 'set-target', 'set-account-profile', 'get-snapshot', 'demo'].includes(channel) ? e.message : 'The action could not finish. Please try again.' }; }
   });
   handle('get-snapshot', null, true);
+  handle('check-updates', () => { updates.check(); return service.snapshot(); });
+  handle('set-auto-updates', (_entry, enabled) => service.setAutomaticUpdates(enabled));
+  handle('open-release-notes', () => shell.openExternal(RELEASES));
   handle('set-window-view', (entry, view) => { dashboards.setView(entry, view); return service.snapshot(entry.month); }, true);
   handle('new-dashboard-window', async entry => { await createWindow(entry); return null; });
   handle('set-appearance', (_entry, mode) => service.setColorMode(mode));
@@ -264,8 +283,16 @@ app.whenReady().then(async () => {
     if (!r.canceled && r.filePath) { const { cards, month, demo } = snapshot; await fs.writeFile(r.filePath, JSON.stringify({ month, demo, exportedAt: new Date().toISOString(), insights: insights.monthlyInsights(snapshot), sources: cards.map(({ scope, ...c }) => c) }, null, 2), { mode: 0o600 }); return 'Snapshot exported.'; }
     return null;
   });
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { label: 'Tokenlight', submenu: [{ role: 'about' }, { type: 'separator' }, { id: 'connections', label: 'Connections…', accelerator: 'CmdOrCtrl+,', click: () => { const e = focused(); if (e && !e.dashboard) e.window.webContents.send('show-connections'); } }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },
+  const showUpdates = async () => { await openDashboard(); window.webContents.send('show-updates'); };
+  const restartUpdate = async () => {
+    if (updates.snapshot().status !== 'ready') return;
+    const answer = await dialog.showMessageBox({ type: 'info', title: 'Restart Tokenlight?', message: 'Restart to install the update?', detail: 'This closes all Tokenlight Dashboard windows. Your settings and connections are kept.', buttons: ['Restart to Update', 'Later'], defaultId: 1, cancelId: 1 });
+    if (answer.response === 0) await updates.restart();
+  };
+  // Menus and the renderer use the same explicit restart confirmation.
+  handle('restart-update', async () => { await restartUpdate(); return null; });
+  const installMenu = () => Menu.setApplicationMenu(Menu.buildFromTemplate([
+    { label: 'Tokenlight', submenu: [{ role: 'about' }, ...updateMenuItems(updates, showUpdates, restartUpdate), { type: 'separator' }, { id: 'connections', label: 'Connections…', accelerator: 'CmdOrCtrl+,', click: () => { const e = focused(); if (e && !e.dashboard) e.window.webContents.send('show-connections'); } }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },
     { label: 'File', submenu: [{ label: 'New Dashboard Window', accelerator: 'CmdOrCtrl+Shift+N', click: () => { const e = focused(); if (e) void createWindow(e).catch(() => {}); } }, { role: 'close' }] },
     { role: 'editMenu' }, { label: 'View', submenu: [
       { id: 'refresh-usage', label: 'Refresh usage', accelerator: 'CmdOrCtrl+R', click: () => { const e = focused(); if (e && !e.dashboard) void service.refresh(null, true); } },
@@ -273,8 +300,11 @@ app.whenReady().then(async () => {
       { id: 'appearance-menu', label: 'Appearance', submenu: MODES.map(mode => ({ id: `appearance-${mode}`, label: mode === 'auto' ? 'Auto — follow system' : mode === 'dark' ? 'Dark' : 'Light', type: 'radio', checked: service.settings.colorMode === mode, click: () => { const e = focused(); if (e && !e.dashboard) void service.setColorMode(mode); } })) }, { role: 'togglefullscreen' }] }, { role: 'windowMenu' }
   ]));
   const openDashboard = mainDashboardOpener({ getWindow: () => window, createWindow: () => createWindow() });
+  installMenu();
   await openDashboard();
-  statusBar = createStatusBar({ app, Tray, Menu, nativeImage, openDashboard });
+  statusBar = createStatusBar({ app, Tray, Menu, nativeImage, openDashboard, updateItems: () => updateMenuItems(updates, showUpdates, restartUpdate) });
+  updates.on('change', () => { installMenu(); updateMenu(); statusBar?.updateMenu(); service.emit(); });
+  updates.start();
   updateMenu(); service.emit(); service.refresh();
   app.on('activate', () => { void openDashboard().catch(() => {}); });
   const timer = setInterval(() => {

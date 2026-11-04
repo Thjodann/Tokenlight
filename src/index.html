@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="demo-mode.css">
   <link rel="stylesheet" href="dashboard-mode.css">
   <link rel="stylesheet" href="allowance-dashboard.css">
+  <link rel="stylesheet" href="updates.css">
 </head>
 <body>
   <div class="titlebar"><span class="window-label">TOKENLIGHT <span id="version">0.2</span></span><span id="sync-status" class="sync-status">Starting up</span></div>
@@ -22,6 +23,7 @@
     </nav>
     <span id="mini-month" class="mini-month" title="Reporting month · UTC"></span>
     <div class="toolbar-actions">
+      <button id="update-ready" class="button update-indicator" aria-label="Update ready" title="Update ready" hidden>Update ready</button>
       <button class="button icon-action" data-action="new-dashboard" aria-label="New Dashboard Window" title="New Dashboard Window · ⌘⇧N"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H3v14h7m-3 4h14V7H7zm7-10v6m-3-3h6"/></svg></button>
       <label class="appearance-control"><span>Appearance</span><select id="appearance-mode" aria-label="Color mode"><option value="auto">Auto</option><option value="dark">Dark</option><option value="light">Light</option></select></label>
       <button id="refresh-button" class="button icon-action" aria-label="Refresh usage" title="Refresh usage"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 7a7 7 0 0 1 11.6-2L20 8M4 16l2.3 3A7 7 0 0 0 18 17"/></svg></button>
@@ -44,6 +46,13 @@
     </div>
   </dialog>
   <dialog id="details-dialog" aria-labelledby="details-title"><div class="dialog-header"><div class="detail-heading"><span id="details-logo" class="source-icon" aria-hidden="true"></span><div><span class="eyebrow" id="details-provider"></span><h2 id="details-title"></h2></div></div><button class="icon-button" data-close="details-dialog" aria-label="Close source details">✕</button></div><div class="dialog-content" id="details-content"></div></dialog>
+  <dialog id="updates-dialog" aria-labelledby="updates-title">
+    <div class="dialog-header"><div><span class="eyebrow">TOKENLIGHT</span><h2 id="updates-title">Updates</h2></div><button class="icon-button" data-close="updates-dialog" aria-label="Close updates">✕</button></div>
+    <div class="dialog-content"><p id="update-version" class="update-version"></p><p id="update-message" role="status" aria-live="polite"></p>
+      <label class="update-preference"><input id="automatic-updates" type="checkbox"><span>Automatically download updates<small>Installs on your next launch. Tokenlight never forces a restart.</small></span></label>
+      <div class="update-actions"><button id="check-updates" class="button">Check for Updates</button><button id="restart-update" class="button" hidden>Restart to Update</button><button id="release-notes" class="button button-quiet">Release notes ↗</button></div>
+    </div>
+  </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <script type="module" src="renderer.mjs"></script>
 </body>

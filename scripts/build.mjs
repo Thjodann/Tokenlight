@@ -5,24 +5,39 @@ import { execFileSync } from 'node:child_process';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
+import { signingConfig, signingPreflight, signOptions, verifySignedApp } from './signing.mjs';
+import { notarizeApp } from './notarize.mjs';
 const root = fileURLToPath(new URL('..', import.meta.url));
 process.chdir(root);
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
+// Reject reused output before Keychain access, generated writes or an Apple upload.
+const config = signingConfig(process.argv.slice(2));
+const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+const output = resolve(process.env.TOKENLIGHT_OUTPUT_DIR || `.codex/output/builds/${stamp}`);
+const artifactPath = join(output, 'Tokenlight-mac-arm64.zip');
+for (const name of ['Tokenlight-mac-arm64.zip', 'build-receipt.json', 'signatures.json', 'notary-submission.zip', 'notarization.json', 'notarization-log.json']) {
+  try { await access(join(output, name)); throw new Error('Refusing to reuse build output. Inspect any prior submission and choose a fresh output directory.'); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+}
+const signing = signingPreflight(config);
+const release = signing.mode === 'developer-id';
 // Electron 42+ downloads its runtime on demand, not during npm ci.
 // Use the pinned package's idempotent installer before manual app packaging.
 execFileSync(process.execPath, [join(root, 'node_modules/electron/install.js')], { stdio: 'inherit', timeout: 180000 });
-const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-const output = resolve(process.env.TOKENLIGHT_OUTPUT_DIR || `.codex/output/builds/${stamp}`);
 const vendor = join(root, 'vendor'); await mkdir(vendor, { recursive: true });
 try { await access(join(vendor, 'codex')); }
 catch {
+  if (release) throw new Error('Release builds require the canonical vendored Codex helper.');
   const installed = '/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex';
   execFileSync('/usr/bin/ditto', ['--norsrc', '--noextattr', installed, join(vendor, 'codex')], { timeout: 60000 });
 }
 // The installed CLI signature refers to its original app's Info.plist. Re-sign
 // only our relocated copy when that bundle-bound signature no longer verifies.
 try { execFileSync('/usr/bin/codesign', ['--verify', '--strict', join(vendor, 'codex')], { stdio: 'ignore' }); }
-catch { execFileSync('/usr/bin/codesign', ['--force', '--sign', '-', join(vendor, 'codex')], { stdio: 'inherit' }); }
+catch {
+  if (release) throw new Error('Canonical Codex input signature is invalid; repair its source before a release build.');
+  execFileSync('/usr/bin/codesign', ['--force', '--sign', '-', join(vendor, 'codex')], { stdio: 'inherit' });
+}
 const codexVersion = execFileSync(join(vendor, 'codex'), ['--version'], { encoding: 'utf8' }).trim();
 async function hash(file) { const digest = createHash('sha256'); for await (const c of createReadStream(file)) digest.update(c); return digest.digest('hex'); }
 const manifest = {};
@@ -63,19 +78,27 @@ for (const entry of await readdir(frameworks, { withFileTypes: true })) {
 }
 await mkdir(join(resources, 'app'), { recursive: true });
 await cp(join(root, 'src'), join(resources, 'app/src'), { recursive: true });
-await writeFile(join(resources, 'app/package.json'), JSON.stringify({ name: pkg.name, productName: pkg.productName, version: pkg.version, main: pkg.main, type: pkg.type }));
+await writeFile(join(resources, 'app/package.json'), JSON.stringify({ name: pkg.name, productName: pkg.productName, version: pkg.version, main: pkg.main, type: pkg.type, tokenlightUpdates: release }));
 execFileSync('/usr/bin/ditto', ['--norsrc', '--noextattr', vendor, join(resources, 'vendor')], { stdio: 'inherit', timeout: 60000 });
 await cp(join(root, '.codex/output/icon/Tokenlight.icns'), join(resources, 'Tokenlight.icns'));
 await cp(join(root, 'THIRD-PARTY-NOTICES.md'), join(resources, 'THIRD-PARTY-NOTICES.md'));
 // Remove inherited Finder metadata only from this new task-owned app bundle.
 execFileSync('/usr/bin/xattr', ['-cr', appPath], { stdio: 'inherit', timeout: 60000 });
-execFileSync('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', appPath], { stdio: 'inherit' });
+let signingEvidence = { mode: 'ad-hoc' };
+if (release) {
+  const { sign } = await import('@electron/osx-sign');
+  await sign(signOptions(appPath, signing, pkg.devDependencies.electron));
+  const signatures = await verifySignedApp(appPath, signing);
+  await writeFile(join(output, 'signatures.json'), JSON.stringify(signatures, null, 2));
+  const notarization = await notarizeApp(appPath, output, signing);
+  await verifySignedApp(appPath, signing);
+  signingEvidence = { mode: 'developer-id', identity: signing.identity, teamId: signing.teamId, notarization, verifiedCodeObjects: signatures.length };
+} else {
+  execFileSync('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', appPath], { stdio: 'inherit' });
+}
 execFileSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', appPath], { stdio: 'inherit' });
-const artifactPath = join(output, 'Tokenlight-mac-arm64.zip');
-try { await access(artifactPath); throw new Error('Refusing to replace an existing build archive. Choose a fresh output directory.'); }
-catch (error) { if (error.code !== 'ENOENT') throw error; }
 execFileSync('/usr/bin/ditto', ['-c', '-k', '--norsrc', '--keepParent', appPath, artifactPath], { stdio: 'inherit', timeout: 180000 });
-const packedReceipt = { ...receipt, appPath, artifactPath, artifactSha256: await hash(artifactPath), mainSourceSha256: await hash(join(appPath, 'Contents/Resources/app/src/main.cjs')), bundledCodexSha256: await hash(join(appPath, 'Contents/Resources/vendor/codex')) };
+const packedReceipt = { ...receipt, signing: signingEvidence, bundledCodexInputSha256: manifest['vendor/codex'], appPath, artifactPath, artifactSha256: await hash(artifactPath), mainSourceSha256: await hash(join(appPath, 'Contents/Resources/app/src/main.cjs')), bundledCodexSha256: await hash(join(appPath, 'Contents/Resources/vendor/codex')) };
 await writeFile(join(output, 'build-receipt.json'), JSON.stringify(packedReceipt, null, 2));
 await writeFile('.codex/output/latest-build.json', JSON.stringify(packedReceipt, null, 2));
-console.log(JSON.stringify({ appPath, artifactPath, sourceId, signing: 'ad hoc; local personal build', receipt: join(output, 'build-receipt.json') }, null, 2));
+console.log(JSON.stringify({ appPath, artifactPath, sourceId, signing: release ? 'Developer ID; notarized and stapled' : 'ad hoc; local personal build', receipt: join(output, 'build-receipt.json') }, null, 2));

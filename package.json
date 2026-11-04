@@ -1,7 +1,7 @@
 {
   "name": "tokenlight",
   "productName": "Tokenlight",
-  "version": "0.6.8",
+  "version": "0.6.9",
   "private": true,
   "description": "A personal desktop overview of AI account allowances and API usage.",
   "type": "module",
@@ -12,9 +12,13 @@
     "check": "node scripts/check.mjs",
     "probe": "node scripts/probe-accounts.mjs",
     "build": "node scripts/build.mjs",
-    "archive": "node scripts/archive.mjs"
+    "archive": "node scripts/archive.mjs",
+    "signing:check": "node scripts/signing-preflight.mjs",
+    "build:release": "node scripts/build.mjs --developer-id",
+    "notary:setup": "node scripts/setup-notary.mjs"
   },
   "devDependencies": {
+    "@electron/osx-sign": "2.7.2",
     "electron": "45.2.1",
     "sharp": "0.35.5"
   }
