@@ -60,7 +60,7 @@ test('main bootstrap keeps kiosk IPC read-only and display windows alive after m
   const app = new EventEmitter(), windows = [], handlers = new Map(); let focused, menu, boot, timer, tray;
   Object.assign(app, { requestSingleInstanceLock: () => true, getVersion: () => 'test', getPath: () => '/fixture', setAccessibilitySupportEnabled() {}, quit() { this.didQuit = true; }, whenReady: () => ({ then(fn) { boot = fn(); } }) });
   class Window extends EventEmitter {
-    constructor(options) { super(); this.options = options; this.destroyed = false; this.sent = []; this.webContents = new EventEmitter(); Object.assign(this.webContents, { mainFrame: {}, session: { setPermissionRequestHandler() {} }, setWindowOpenHandler() {}, send: (...args) => this.sent.push(args) }); windows.push(this); }
+    constructor(options) { super(); this.options = options; this.destroyed = false; this.sent = []; this.webContents = new EventEmitter(); Object.assign(this.webContents, { mainFrame: {}, session: { setPermissionRequestHandler(fn) { this.permission = fn; } }, setWindowOpenHandler(fn) { this.openHandler = fn; }, send: (...args) => this.sent.push(args) }); windows.push(this); }
     static getFocusedWindow() { return focused; }
     isDestroyed() { return this.destroyed; }
     isMinimized() { return false; }
@@ -78,15 +78,28 @@ test('main bootstrap keeps kiosk IPC read-only and display windows alive after m
   class ProviderError extends Error {}
   let source = await readFile(new URL('../src/main.cjs', import.meta.url), 'utf8');
   source = source.replace("Promise.all([import('./model.mjs'), import('./providers.mjs'), import('./insights.mjs'), import('./demo-data.mjs')])", 'Promise.resolve(__modules)');
-  vm.runInNewContext(source, { require: id => id === 'electron' ? electron : id === 'node:fs/promises' ? fakeFS : require(id), __modules: [model, { ProviderError }, insights, demoData], process: { env: {}, argv: ['--demo'] }, __dirname: '/fixture/src', setInterval: fn => { timer = fn; return { unref() {} }; } });
+  vm.runInNewContext(source, { require: id => id === 'electron' ? electron : id === 'node:fs/promises' ? fakeFS : id === './status-bar.cjs' ? { ...require(id), createStatusBar: args => require(id).createStatusBar({ ...args, platform: 'darwin' }) } : require(id), __modules: [model, { ProviderError }, insights, demoData], process: { env: {}, argv: ['--demo'] }, __dirname: '/fixture/src', setInterval: fn => { timer = fn; return { unref() {} }; } });
   await boot;
   const main = windows[0], call = (w, channel, ...args) => handlers.get(channel)(event(w), ...args);
   assert.equal((await call(main, 'get-snapshot')).value.presentation.dashboard, false);
   assert.equal(handlers.has('dashboard-mode'), false, 'main has no mode-conversion command');
   assert.equal((await call(main, 'set-window-view', 'api')).ok, true);
   assert.equal((await call(main, 'set-month', '2026-10')).ok, true);
+  assert.equal(handlers.has('new-provider-window'), false);
+  assert.equal(handlers.has('set-provider-window'), false);
+  assert.equal(items(menu.template).some(i => i.label === 'New Provider Window'), false);
+  assert.equal((await call(main, 'show-provider-dashboard', 'constructor')).ok, false);
+  assert.equal(windows.length, 1);
+  assert.equal((await call(main, 'show-provider-dashboard', 'anthropic')).ok, true);
+  const firstLink = windows.at(-1), linkedSnapshot = (await call(firstLink, 'get-snapshot')).value;
+  assert.equal(linkedSnapshot.presentation.view, 'providers'); assert.equal(linkedSnapshot.presentation.provider, 'anthropic');
+  assert.equal(linkedSnapshot.month, '2026-10');
+  assert.deepEqual(firstLink.getSize(), main.getSize());
+  assert.equal(firstLink.options.title, 'Tokenlight — Dashboard');
+  assert.deepEqual(Array.from(linkedSnapshot.cards, c => c.id), ['claude', 'anthropic']);
+  firstLink.close();
   assert.equal((await call(main, 'new-dashboard-window')).ok, true);
-  const kiosk = windows[1], display = (await call(kiosk, 'get-snapshot')).value;
+  const kiosk = windows.at(-1), display = (await call(kiosk, 'get-snapshot')).value;
   assert.equal(display.presentation.view, 'api'); assert.equal(display.month, '2026-10'); assert.equal(display.presentation.dashboard, true);
   for (const channel of ['set-remaining-allowance', 'set-appearance', 'set-layout', 'set-account-profile', 'refresh', 'set-month', 'save-key', 'set-target', 'choose-secrets', 'open-provider', 'connect', 'demo', 'sign-in-claude', 'export', 'new-dashboard-window', 'check-updates', 'set-auto-updates', 'restart-update', 'open-release-notes']) {
     assert.equal((await call(kiosk, channel)).ok, false, `${channel} must reject a kiosk caller before doing work`);
@@ -102,6 +115,39 @@ test('main bootstrap keeps kiosk IPC read-only and display windows alive after m
   assert.equal((await handlers.get('set-window-view')({ sender: kiosk.webContents, senderFrame: {} }, 'api')).ok, false);
   assert.equal((await call(kiosk, 'get-snapshot')).value.presentation.view, 'account');
   assert.equal((await handlers.get('get-snapshot')({ sender: main.webContents, senderFrame: {} })).ok, false);
+  assert.equal((await call(main, 'set-window-view', 'providers')).ok, false);
+  const countBeforeLink = windows.length;
+  assert.equal((await call(main, 'set-month', '2026-09')).ok, true);
+  assert.equal((await call(main, 'show-provider-dashboard', 'anthropic')).ok, true);
+  assert.equal(windows.length, countBeforeLink, 'deep link reuses existing display');
+  const provider = kiosk, providerSnap = (await call(provider, 'get-snapshot')).value;
+  assert.equal(providerSnap.presentation.view, 'providers'); assert.equal(providerSnap.month, '2026-10', 'existing reporting month preserved');
+  assert.equal(provider.options.webPreferences.sandbox, true);
+  assert.equal(provider.options.webPreferences.contextIsolation, true);
+  assert.equal(provider.options.webPreferences.nodeIntegration, false);
+  assert.equal(provider.webContents.openHandler().action, 'deny');
+  let denied; provider.webContents.session.permission(null, 'camera', allowed => { denied = allowed; }); assert.equal(denied, false);
+  let prevented = false; provider.webContents.emit('will-navigate', { preventDefault() { prevented = true; } }); assert.equal(prevented, true);
+  assert.equal((await handlers.get('set-dashboard-provider')({ sender: provider.webContents, senderFrame: {} }, 'cursor')).ok, false);
+  assert.equal(providerSnap.presentation.provider, 'anthropic');
+  assert.deepEqual(Array.from(providerSnap.cards, c => c.id), ['claude', 'anthropic']);
+  for (const channel of ['save-key', 'choose-secrets', 'demo', 'connect', 'refresh', 'set-month', 'set-layout', 'show-provider-dashboard', 'new-dashboard-window']) assert.equal((await call(provider, channel)).ok, false, channel);
+  assert.equal((await call(main, 'set-dashboard-provider', 'cursor')).ok, false);
+  assert.equal((await call(provider, 'set-dashboard-provider', '../../private')).ok, false);
+  assert.equal((await call(provider, 'set-dashboard-provider', 'cursor')).value.presentation.provider, 'cursor');
+  timer(); assert.equal(provider.sent.at(-1)[1].presentation.provider, 'cursor');
+  assert.deepEqual(Array.from(provider.sent.at(-1)[1].cards, c => c.id), ['cursor']);
+  const otherTab = (await call(provider, 'set-window-view', 'account')).value;
+  assert.equal(otherTab.cards.length, 7, 'full dashboard data restored');
+  assert.equal(otherTab.presentation.provider, 'cursor'); assert.equal(otherTab.settings.secretsPath, undefined);
+  const returned = (await call(provider, 'set-window-view', 'providers')).value;
+  assert.deepEqual(Array.from(returned.cards, c => c.id), ['cursor']);
+  assert.equal((await call(main, 'get-snapshot')).value.presentation.view, 'api');
+  assert.equal((await call(main, 'new-dashboard-window')).ok, true);
+  const independent = windows.at(-1); assert.equal((await call(independent, 'set-window-view', 'providers')).ok, true);
+  assert.equal((await call(independent, 'set-dashboard-provider', 'ollama')).value.presentation.provider, 'ollama');
+  assert.equal((await call(provider, 'get-snapshot')).value.presentation.provider, 'cursor');
+  independent.close(); assert.equal((await call(independent, 'get-snapshot')).ok, false);
   main.close(); assert.equal(kiosk.isDestroyed(), false); assert.equal(app.didQuit, undefined);
   timer(); assert.equal(kiosk.sent.at(-1)[1].month, '2026-10');
   app.emit('second-instance'); await new Promise(resolve => setImmediate(resolve));

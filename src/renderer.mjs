@@ -1,4 +1,5 @@
 import { insightsPage, financeDetails, cardCosts } from './insight-view.mjs';
+import { mountProviderReader } from './provider-panel.mjs';
 import { dashboardView, dashboardLayout } from './dashboard-view.mjs';
 import { DESKTOP_QUERY } from './desktop-view.mjs';
 import { wideView, WIDE_QUERY, instrumentLayout } from './wide-view.mjs';
@@ -14,6 +15,8 @@ const desktopQuery = window.matchMedia(DESKTOP_QUERY);
 const $ = s => document.querySelector(s);
 const api = window.tokenlight;
 let dashboardSource = null;
+const providerDetails = new Map();
+let providerReader;
 let snapshot, view = 'overview', selected = null, detailDirty = false, toastTimer, currentMini = false;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const monthName = value => new Date(value + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -78,9 +81,17 @@ function render() {
   if (display) {
     for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
     $('#version').textContent = snapshot.version;
-    document.title = `Tokenlight — ${view === 'account' ? 'Accounts' : view === 'api' ? 'API usage' : view === 'insights' ? 'Insights' : 'Overview'} · ${snapshot.month}`;
-    const focusedView = document.activeElement?.dataset?.dashboardView;
-    $('#main').innerHTML = dashboardView(snapshot, view);
+    document.title = `Tokenlight — ${view === 'account' ? 'Accounts' : view === 'api' ? 'API usage' : view === 'insights' ? 'Insights' : view === 'providers' ? 'Providers' : 'Overview'} · ${snapshot.month}`;
+    const active = document.activeElement, focusedView = active?.dataset?.dashboardView;
+    const focusedProvider = active?.id === 'provider-selector';
+    const focusedControl = active?.dataset?.providerFocus;
+    const key = snapshot.presentation?.provider;
+    if (!providerDetails.has(key)) providerDetails.set(key, {});
+    const providerState = providerDetails.get(key);
+    $('#main').innerHTML = dashboardView(snapshot, view, { width: window.innerWidth, height: window.innerHeight, providerState });
+    providerReader = mountProviderReader(document.querySelector('.provider-reader'), providerState);
+    if (focusedProvider) $('#provider-selector')?.focus({ preventScroll: true });
+    if (focusedControl) [...document.querySelectorAll('[data-provider-focus]')].find(e => e.dataset.providerFocus === focusedControl)?.focus({ preventScroll: true });
     if (focusedView) document.querySelector(`[data-dashboard-view="${focusedView}"]`)?.focus({ preventScroll: true });
     fitInstruments();
     return;
@@ -152,7 +163,7 @@ function renderDetails() {
   const metric = finite(c.monthly) ? `<div class="detail-reading"><div class="detail-stat"><span>${esc(monthName(snapshot.month))} · ${c.id === 'claude' ? 'local logs' : 'UTC'}</span><strong>${fullCount(c.monthly)} <small>${esc(c.unit)}</small></strong></div><div class="detail-stat"><span>Last successful reading</span><strong>${since(c.lastUpdatedAt)}</strong></div></div>` : '';
   const windows = (c.windows || []).map((w, index) => `<div class="detail-window"><span>${esc(w.label)} <strong data-allowance-index="${index}">${allowanceReading(w.percent, snapshot.settings?.showRemainingAllowance)}</strong></span><small>${reset(w.resetsAt, true)}</small></div>`).join('');
   const credentials = c.kind === 'api' ? `<div class="detail-section"><h3>${['elevenlabs', 'ollama'].includes(c.id) ? 'API key' : 'Usage-reporting key'}</h3><p>${c.id === 'ollama' ? 'Use your Ollama Cloud API key. Usage and balance are read without generating model requests.' : c.id === 'elevenlabs' ? 'Use a key with access to subscription and usage data.' : 'Organization usage reporting needs an admin credential. A normal key used for prompts may not have access.'}</p><form id="key-form"><label for="provider-key">${c.id === 'openai' ? 'OPENAI_ADMIN_KEY' : c.id === 'anthropic' ? 'ANTHROPIC_ADMIN_KEY' : c.id === 'ollama' ? 'OLLAMA_CLOUD_API_KEY' : 'ELEVENLABS_API_KEY'}</label><div class="input-row"><input id="provider-key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste a new key" minlength="12" required ${snapshot.demo ? 'disabled' : ''}><button class="button button-primary" type="submit" ${snapshot.demo ? 'disabled' : ''}>Save securely</button></div></form><p class="input-help">Encrypted with macOS secure storage. Keys are never included in exports. Your existing secrets file is also supported.</p><button class="text-link" data-action="credentials" data-id="${c.id}">Open provider key settings ↗</button></div>` : `<div class="detail-section"><h3>Your desktop account</h3><p>${c.id === 'claude' ? 'Tokenlight follows Claude Code’s current session and checks again when you return or wake your Mac. If Claude requires renewal, Sign in opens your browser and reconnects automatically. macOS may ask you to allow Keychain access.' : c.id === 'cursor' ? 'Reads your current Cursor desktop session without changing it. If sign-in has expired, sign in again in Cursor and reconnect here.' : 'Reads your Codex account through the bundled helper. Sign in to Codex with ChatGPT if the connection needs setup.'}</p><div class="detail-actions">${c.id === 'claude' ? `<button class="button button-primary" data-action="signin" data-id="claude" ${snapshot.claudeSignIn?.pending ? 'disabled' : ''}>${snapshot.claudeSignIn?.pending ? 'Waiting for sign-in…' : 'Sign in to Claude Code'}</button>` : ''}<button class="button" data-action="connect" data-id="${c.id}">Connect${hasReading(c) ? ' again' : ''}</button></div></div>`;
-  $('#details-content').innerHTML = `<p class="detail-description">${esc(c.description)}</p>${snapshot.demo ? '<div class="detail-notice">Sample data is active. Leave the preview to verify a live connection.</div>' : c.error ? `<div class="detail-notice error">${esc(c.error)}</div>` : ''}${c.id === 'claude' && snapshot.claudeSignIn ? `<div class="detail-notice ${snapshot.claudeSignIn.error ? 'error' : ''}" role="status">${esc(snapshot.claudeSignIn.message)}</div>` : ''}${claudeConnectionSection(c)}${metric}${windows}${creditSection(c, true)}${c.creditNote ? `<p class="detail-description">${esc(c.creditNote)}</p>` : ''}${c.costNote ? `<div class="detail-notice">${esc(c.costNote)}</div>` : ''}${c.allowanceNote ? `<p class="detail-description">${esc(c.allowanceNote)}</p>` : ''}${c.id === 'ollama' && (finite(c.rollingRequests) || finite(c.rollingUsageUsd)) ? `<p class="detail-description">Available rolling history: ${finite(c.rollingRequests) ? formatCount(c.rollingRequests) + ' requests' : 'request count unavailable'}${finite(c.rollingUsageUsd) ? ' · $' + c.rollingUsageUsd.toFixed(2) + ' usage value' : ''}</p>` : ''}${!c.creditBalances?.length && c.balanceSummary ? `<p class="detail-description">${esc(c.balanceSummary)}</p>` : ''}${c.breakdown ? `<div class="metric-list">Input <strong>${formatCount(c.breakdown.input)}</strong> Output <strong>${formatCount(c.breakdown.output)}</strong> Cache <strong>${formatCount(c.breakdown.cache)}</strong></div>` : ''}${c.coverage ? `<p class="detail-description">${esc(c.coverage)}</p>` : ''}${c.historyNote ? `<div class="detail-notice">${esc(c.historyNote)}</div>` : ''}${c.connectionNote ? `<p class="input-help">${esc(c.connectionNote)}</p>` : ''}${c.asOf ? `<p class="input-help">Provider data refreshed: ${esc(new Date(c.asOf).toLocaleString())}</p>` : ''}${financeDetails(c,snapshot)}${credentials}<div class="detail-section"><h3>Optional monthly target</h3><p>Your own reference point for ${c.id === 'claude' ? 'tokens recorded on this Mac' : c.id === 'elevenlabs' ? 'credits' : 'tokens'}. This does not change provider limits or stop usage.</p><form id="target-form"><label for="monthly-target">${c.id === 'elevenlabs' ? 'Credits' : 'Tokens'} per calendar month</label><div class="input-row"><input id="monthly-target" type="number" min="1" max="9007199254740991" step="1" placeholder="No target" value="${c.monthlyTarget || ''}"><button class="button" type="submit">Save target</button></div></form><p class="input-help">Clear the field to remove your target.</p></div><div class="detail-actions"><button class="button" data-action="dashboard" data-id="${c.id}">Open usage dashboard ↗</button><button class="button button-quiet" data-action="refresh-source" data-id="${c.id}">Refresh this source</button></div>`;
+  $('#details-content').innerHTML = `<button class="button" data-action="providers" data-id="${esc(c.id)}">View in Providers ↗</button><p class="detail-description">${esc(c.description)}</p>${snapshot.demo ? '<div class="detail-notice">Sample data is active. Leave the preview to verify a live connection.</div>' : c.error ? `<div class="detail-notice error">${esc(c.error)}</div>` : ''}${c.id === 'claude' && snapshot.claudeSignIn ? `<div class="detail-notice ${snapshot.claudeSignIn.error ? 'error' : ''}" role="status">${esc(snapshot.claudeSignIn.message)}</div>` : ''}${claudeConnectionSection(c)}${metric}${windows}${creditSection(c, true)}${c.creditNote ? `<p class="detail-description">${esc(c.creditNote)}</p>` : ''}${c.costNote ? `<div class="detail-notice">${esc(c.costNote)}</div>` : ''}${c.allowanceNote ? `<p class="detail-description">${esc(c.allowanceNote)}</p>` : ''}${c.id === 'ollama' && (finite(c.rollingRequests) || finite(c.rollingUsageUsd)) ? `<p class="detail-description">Available rolling history: ${finite(c.rollingRequests) ? formatCount(c.rollingRequests) + ' requests' : 'request count unavailable'}${finite(c.rollingUsageUsd) ? ' · $' + c.rollingUsageUsd.toFixed(2) + ' usage value' : ''}</p>` : ''}${!c.creditBalances?.length && c.balanceSummary ? `<p class="detail-description">${esc(c.balanceSummary)}</p>` : ''}${c.breakdown ? `<div class="metric-list">Input <strong>${formatCount(c.breakdown.input)}</strong> Output <strong>${formatCount(c.breakdown.output)}</strong> Cache <strong>${formatCount(c.breakdown.cache)}</strong></div>` : ''}${c.coverage ? `<p class="detail-description">${esc(c.coverage)}</p>` : ''}${c.historyNote ? `<div class="detail-notice">${esc(c.historyNote)}</div>` : ''}${c.connectionNote ? `<p class="input-help">${esc(c.connectionNote)}</p>` : ''}${c.asOf ? `<p class="input-help">Provider data refreshed: ${esc(new Date(c.asOf).toLocaleString())}</p>` : ''}${financeDetails(c,snapshot)}${credentials}<div class="detail-section"><h3>Optional monthly target</h3><p>Your own reference point for ${c.id === 'claude' ? 'tokens recorded on this Mac' : c.id === 'elevenlabs' ? 'credits' : 'tokens'}. This does not change provider limits or stop usage.</p><form id="target-form"><label for="monthly-target">${c.id === 'elevenlabs' ? 'Credits' : 'Tokens'} per calendar month</label><div class="input-row"><input id="monthly-target" type="number" min="1" max="9007199254740991" step="1" placeholder="No target" value="${c.monthlyTarget || ''}"><button class="button" type="submit">Save target</button></div></form><p class="input-help">Clear the field to remove your target.</p></div><div class="detail-actions"><button class="button" data-action="dashboard" data-id="${c.id}">Open usage dashboard ↗</button><button class="button button-quiet" data-action="refresh-source" data-id="${c.id}">Refresh this source</button></div>`;
   for (const form of document.querySelectorAll('.local-profile-form')) form.addEventListener('submit', async e => {
     e.preventDefault();
     const drafts = [...document.querySelectorAll('.local-profile-form input')].filter(input => !form.contains(input) && input.value !== input.defaultValue).map(input => [input.id, input.value]);
@@ -208,6 +219,7 @@ async function run(fn) { try { const value = await fn(); if (value?.cards) updat
 async function action(name, id) {
   if (snapshot.presentation?.dashboard) return;
   if (name === 'new-dashboard') { await run(() => api.viewState(view)); return run(() => api.newDashboard()); }
+  if (name === 'providers') return run(() => api.showProviderDashboard(providerFor(id)));
   if (name === 'details') return showDetails(id);
   if (name === 'connections') return showConnections();
   if (name === 'dashboard' || name === 'credentials' || name === 'pricing') return run(() => api.openProvider(id, name));
@@ -218,6 +230,26 @@ async function action(name, id) {
   if (name === 'live') return run(() => api.demo(false));
   if (['previous', 'next'].includes(name)) { const d = new Date(snapshot.month + '-01T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + (name === 'previous' ? -1 : 1)); return run(() => api.month(d.toISOString().slice(0, 7))); }
 }
+function providerState() { return providerDetails.get(snapshot?.presentation?.provider); }
+document.addEventListener('change', e => {
+  if (e.target.id !== 'provider-section' || !snapshot?.presentation?.dashboard) return;
+  const [source, section] = e.target.value.split(':');
+  Object.assign(providerState(), { source, section, item: 0, offset: 0 }); render();
+});
+document.addEventListener('click', e => {
+  if (!snapshot?.presentation?.dashboard || view !== 'providers') return;
+  const detail = e.target.closest('[data-provider-detail]'), back = e.target.closest('[data-provider-back]'), page = e.target.closest('[data-provider-page]');
+  if (detail) { Object.assign(providerState(), { detail: true, source: detail.dataset.providerDetail, section: 'allowances', item: 0, offset: 0 }); render(); document.querySelector('[data-provider-focus="back"]')?.focus({ preventScroll: true }); }
+  if (back) { const source = providerState().source; providerState().detail = false; render(); [...document.querySelectorAll('[data-provider-detail]')].find(el => el.dataset.providerDetail === source)?.focus({ preventScroll: true }); }
+  if (page) providerReader?.move(Number(page.dataset.providerPage));
+});
+document.addEventListener('keydown', e => {
+  if (!providerReader || view !== 'providers' || e.target.tagName === 'SELECT' || !e.target.closest('.provider-reader')) return;
+  const delta = { ArrowLeft: -1, ArrowRight: 1, PageUp: -1, PageDown: 1, Home: -Infinity, End: Infinity }[e.key];
+  if (delta !== undefined) { e.preventDefault(); providerReader.move(delta); }
+  if (e.key === 'Escape') { e.preventDefault(); document.querySelector('[data-provider-back]')?.click(); }
+});
+document.addEventListener('change', e => { if (e.target.id === 'provider-selector' && snapshot?.presentation?.dashboard) void run(() => api.provider(e.target.value)); });
 document.addEventListener('click', e => { const displayNav = e.target.closest('[data-dashboard-view]'); if (displayNav && snapshot?.presentation?.dashboard) { void run(() => api.viewState(displayNav.dataset.dashboardView)); return; } if (snapshot?.presentation?.dashboard) return; const close = e.target.closest('[data-close]'); if (close) return $('#' + close.dataset.close).close(); const button = e.target.closest('[data-action]'); if (button) action(button.dataset.action, button.dataset.id); const nav = e.target.closest('[data-view]'); if (nav) { view = nav.dataset.view; void api.viewState(view).catch(() => {}); render(); } });
 compactQuery.addEventListener('change', () => render());
 wideQuery.addEventListener('change', () => render());
@@ -241,3 +273,10 @@ $('#details-dialog').addEventListener('close', () => { const host = $('#connecti
 $('#connections-dialog').addEventListener('close', () => $('#connections-button').focus({ preventScroll: true }));
 try { update(await api.snapshot()); api.onSnapshot(update); api.onConnections(showConnections); api.onUpdates(showUpdates); }
 catch { $('#main').innerHTML = '<h1>Couldn’t start Tokenlight</h1><p class="page-description">Close and reopen the app to try again.</p>'; }
+
+let providerResizeFrame;
+window.addEventListener('resize', () => {
+  if (!snapshot?.presentation?.dashboard || view !== 'providers') return;
+  cancelAnimationFrame(providerResizeFrame);
+  providerResizeFrame = requestAnimationFrame(render);
+});

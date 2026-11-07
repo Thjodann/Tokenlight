@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { dashboardView, dashboardLayout } from '../src/dashboard-view.mjs';
 import { demoCards } from '../src/fixtures.mjs';
 const snapshot = () => ({ month: '2026-11', demo: true, settings: { accountProfiles: {}, targets: {} }, cards: demoCards('2026-11', Date.parse('2026-11-02T00:00:00Z')) });
-test('four display views allow only local filters and preserve their source filter', () => {
+test('original display views allow only local filters and preserve their source filter', () => {
   for (const [view, count] of [['overview', 5], ['account', 3], ['api', 4], ['insights', 0]]) {
     const html = dashboardView(snapshot(), view);
     assert.equal((html.match(/<article /g) || []).length, count);
     assert.doesNotMatch(html, /<(input|select|a|form)\b|data-action=/);
-    assert.equal((html.match(/data-dashboard-view=/g) || []).length, 4);
+    assert.equal((html.match(/data-dashboard-view=/g) || []).length, 5);
     assert.match(html, new RegExp(`data-dashboard-view="${view}"[^>]*aria-pressed="true"`));
     assert.match(html, /SAMPLE DATA/); assert.match(html, /Nov 2026/);
     assert.match(html, /not an extra charge/);
@@ -59,4 +59,13 @@ test('passive pop-outs use source-specific rings and sparklines instead of detai
  assert.match(html,/125% used/);assert.match(html,/stroke-dasharray="100 100"/);
  assert.match(html,/activity-line/);assert.match(html,/dial-unreported/);
  assert.doesNotMatch(html,/monitor-cost|metric-limit-track|monitor-pools|source-card/);
+});
+
+test('Providers tab shares dashboard navigation and renders only its chosen provider', () => {
+  const s = snapshot(); s.presentation = { dashboard: true, provider: 'anthropic', providers: { anthropic: 'Anthropic', cursor: 'Cursor' } };
+  const html = dashboardView(s, 'providers');
+  assert.match(html, /data-view="providers"/); assert.match(html, /data-dashboard-view="providers"[^>]*aria-pressed="true"/);
+  assert.equal((html.match(/class="monitor-header"/g) || []).length, 1);
+  assert.match(html, /id="provider-selector"/); assert.match(html, /data-source="claude"/); assert.match(html, /data-source="anthropic"/);
+  assert.doesNotMatch(html, /data-source="cursor"|data-source="openai"|<form|data-action=|class="titlebar"|TOKENLIGHT/);
 });

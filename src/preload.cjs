@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 async function invoke(channel, ...args) { const result = await ipcRenderer.invoke(channel, ...args); if (!result.ok) throw new Error(result.error); return result.value; }
 contextBridge.exposeInMainWorld('tokenlight', {
+  showProviderDashboard: id => invoke('show-provider-dashboard', id), provider: id => invoke('set-dashboard-provider', id),
   viewState: view => invoke('set-window-view', view), newDashboard: () => invoke('new-dashboard-window'),
   snapshot: () => invoke('get-snapshot'), refresh: id => invoke('refresh', id), month: value => invoke('set-month', value),
   checkUpdates: () => invoke('check-updates'), restartUpdate: () => invoke('restart-update'),

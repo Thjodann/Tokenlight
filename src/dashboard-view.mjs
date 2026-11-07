@@ -8,12 +8,16 @@ import { activityLine, dashboardInsights } from './usage-visuals.mjs';
 import { brandMark } from './brand.mjs';
 import { providerGroups, sourceLabel } from './provider-groups.mjs';
 
-export const dashboardNames = { overview: 'Overview', account: 'Accounts', api: 'API usage', insights: 'Insights' };
+import { providerPanel } from './provider-panel.mjs';
+import { providerLayout } from './provider-layout.mjs';
+
+export const dashboardNames = { overview: 'Overview', account: 'Accounts', api: 'API usage', insights: 'Insights', providers: 'Providers' };
 const status = c => c.status === 'stale' ? 'Stale reading' : c.status === 'refreshing' ? 'Refreshing' : ['setup', 'unconnected'].includes(c.status) ? 'Needs connection' : c.partial ? 'Partial history' : 'Connected';
 const icons = {
   overview: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
   account: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>',
   api: '<path d="m8 5-6 7 6 7m8-14 6 7-6 7m-3-16-2 18"/>',
+  providers: '<circle cx="12" cy="12" r="8"/><path d="M12 4v8l5 3"/>',
   insights: '<path d="M4 20V10m8 10V4m8 16v-7"/>'
 };
 export function dashboardLayout(width, height, count) {
@@ -36,11 +40,19 @@ function dashboardPaid(card) {
   const label = paidLimitText(card) + (fableAccessText(card) ? '; ' + fableAccessText(card) : '');
   return `<div class="monitor-spend${p.capReached ? ' is-reached' : ''}" title="${esc(label)}" aria-label="${esc(label)}"><span>Paid / mo</span><b>${esc(value(p.used))} / ${esc(value(p.limit))}</b>${p.capReached || p.enabled === false ? '<svg class="monitor-spend-lock" viewBox="0 0 16 16" role="img" aria-label="Paid usage unavailable"><rect x="3" y="7" width="10" height="7" rx="1"/><path d="M5 7V4a3 3 0 0 1 6 0v3"/></svg>' : ''}${percent == null ? '' : `<svg class="monitor-spend-track" viewBox="0 0 100 1" preserveAspectRatio="none" aria-hidden="true"><path d="M0 .5H100"/><path class="monitor-spend-fill" d="M0 .5H${percent}"/></svg>`}</div>`;
 }
-export function dashboardView(snapshot, requested = 'overview') {
+export function dashboardView(snapshot, requested = 'overview', viewport = { width: 440, height: 680 }) {
   const view = Object.hasOwn(dashboardNames, requested) ? requested : 'overview';
   const cards = snapshot.cards.filter(c => view === 'overview' || view === 'insights' || c.kind === view);
   const i = monthlyInsights(snapshot), month = new Date(snapshot.month + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
   const nav = Object.entries(dashboardNames).map(([id, name]) => `<button type="button" data-dashboard-view="${id}" aria-label="${name}" aria-pressed="${id === view}" title="${name}"><svg viewBox="0 0 24 24" aria-hidden="true">${icons[id]}</svg><span>${name}</span></button>`).join('');
+  if (view === 'providers') {
+    const regime = providerLayout(viewport.width, viewport.height);
+    const provider = snapshot.presentation?.provider || 'openai';
+    const choices = snapshot.presentation?.providers || { openai: 'OpenAI', anthropic: 'Anthropic', cursor: 'Cursor', elevenlabs: 'ElevenLabs', ollama: 'Ollama' };
+    const inlineToolbar = regime === 'micro' || regime === 'strip';
+    const picker = `<div class="provider-selector"><span class="provider-picker-mark" aria-hidden="true">${providerLogo(snapshot.cards[0]?.id || provider)}</span><label for="provider-selector">Provider</label><select id="provider-selector">${Object.entries(choices).map(([id, title]) => `<option value="${esc(id)}" ${id === provider ? 'selected' : ''}>${esc(title)}</option>`).join('')}</select></div>`;
+    return `<section class="monitor-page" data-view="providers" data-provider-regime="${regime}" aria-label="Providers dashboard"><header class="monitor-header"><span class="monitor-brand" aria-hidden="true">${brandMark()}</span><nav class="monitor-nav" aria-label="Dashboard view">${nav}</nav>${inlineToolbar ? picker : ''}<span class="monitor-period" title="${esc(snapshot.month)} · reporting month in UTC">${month}</span><span class="monitor-live">${snapshot.demo ? 'SAMPLE DATA' : snapshot.cards.some(c => c.status === 'refreshing') ? 'UPDATING' : 'LIVE'}</span></header><div class="provider-scroll"><div class="provider-tab">${inlineToolbar ? '' : picker}${providerPanel(snapshot, provider, regime, viewport.providerState, viewport)}</div></div></section>`;
+  }
   const total = (label, value, note) => `<div class="monitor-total" title="${esc(note)}"><span>${label}</span><strong>${value}</strong><small>${esc(note)}</small></div>`;
   const summary = `<div class="monitor-totals">${total('Known cost', usd(i.total) + (i.completeSources < snapshot.cards.length ? ' <sup>*</sup>' : ''), `${i.completeSources}/${snapshot.cards.length} sources complete · before credits / tax`)}${total('Usage value', usd(i.estimatedValue) + (i.valuePartial ? ' <sup>~</sup>' : ''), 'Reported / estimated value · not an extra charge')}</div>`;
   const highlights = `<div class="monitor-highlights">${activityOverview(i)}</div>`;

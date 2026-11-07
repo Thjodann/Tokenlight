@@ -7,7 +7,7 @@ const { spawn } = require('node:child_process');
 const { MODES, normalizeColorMode, backgroundColor, applyColorMode } = require('./appearance.cjs');
 const { LAYOUTS, MINIMUM, normalizeLayout, initialSize, LayoutController } = require('./layout.cjs');
 const { cacheAllowed, reconcileCredentials } = require('./credential-cache.cjs');
-const { DashboardWindows } = require('./dashboard-windows.cjs');
+const { DashboardWindows, validProvider } = require('./dashboard-windows.cjs');
 const dashboards = new DashboardWindows();
 const { createClaudeLogin } = require('./claude-login.cjs');
 const { mainDashboardOpener, createStatusBar } = require('./status-bar.cjs');
@@ -233,12 +233,12 @@ app.whenReady().then(async () => {
       const item = menu?.getMenuItemById(id); if (item) item.enabled = !!entry && !entry.dashboard;
     }
   };
-  const createWindow = async (source = null) => {
+  const createWindow = async (source = null, selectedProvider = null) => {
     const kiosk = !!source;
     const [width, height] = source ? source.window.getSize() : initialSize(process.env.TOKENLIGHT_WINDOW_SIZE, service.settings.layoutMode);
     const browser = new BrowserWindow({ title: kiosk ? 'Tokenlight — Dashboard' : 'Tokenlight', width, height, minWidth: MINIMUM.width, minHeight: MINIMUM.height, show: false, backgroundColor: backgroundColor(nativeTheme.shouldUseDarkColors), titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 10 },
       webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false, backgroundThrottling: false } });
-    const entry = dashboards.add(browser, { kiosk, view: source?.view, month: source?.month || service.month, followCurrent: source ? source.followCurrent : service.followCurrent });
+    const entry = dashboards.add(browser, { kiosk, provider: selectedProvider || source?.provider || 'openai', view: selectedProvider ? 'providers' : source?.view, month: source?.month || service.month, followCurrent: source ? source.followCurrent : service.followCurrent });
     if (!kiosk) { window = browser; layoutController = new LayoutController(browser, service.settings.layoutMode); }
     browser.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     browser.webContents.on('will-navigate', event => event.preventDefault());
@@ -261,6 +261,17 @@ app.whenReady().then(async () => {
   handle('set-auto-updates', (_entry, enabled) => service.setAutomaticUpdates(enabled));
   handle('open-release-notes', () => shell.openExternal(RELEASES));
   handle('set-window-view', (entry, view) => { dashboards.setView(entry, view); return service.snapshot(entry.month); }, true);
+  handle('set-dashboard-provider', (entry, id) => { dashboards.setProvider(entry, id); return service.snapshot(entry.month); }, true);
+  handle('show-provider-dashboard', async (source, id) => {
+    if (!validProvider(id)) throw new Error('Choose an available provider.');
+    // Keep an existing display's reporting month when opening the provider tab.
+    const entry = [...dashboards.entries.values()].find(e => e.dashboard && !e.window.isDestroyed()) || await createWindow(source, id);
+    dashboards.setProvider(entry, id); dashboards.setView(entry, 'providers');
+    entry.window.webContents.send('snapshot', dashboards.snapshot(entry, service.snapshot(entry.month)));
+    if (entry.window.isMinimized()) entry.window.restore();
+    entry.window.show(); entry.window.focus();
+    return null;
+  });
   handle('new-dashboard-window', async entry => { await createWindow(entry); return null; });
   handle('set-appearance', (_entry, mode) => service.setColorMode(mode));
   handle('set-remaining-allowance', (_entry, enabled) => service.setShowRemainingAllowance(enabled));
