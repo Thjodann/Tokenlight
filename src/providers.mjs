@@ -1,3 +1,4 @@
+import { readCodexLocal } from './codex-local.mjs';
 import { readClaudeProfile } from './claude-profile.mjs';
 import { maintainClaudeSession } from './claude-maintenance.mjs';
 import { loadClaudeSession, readClaudeUsage } from './claude-session.mjs';
@@ -87,12 +88,12 @@ export async function withCodex(resourcePath, fn) {
   finally { child.stdin.end(); child.kill('SIGTERM'); }
 }
 async function codex(month, ctx) {
-  return withCodex(ctx.resourcePath, async rpc => {
+  return (ctx.withCodex || withCodex)(ctx.resourcePath, async rpc => {
     const account = await rpc('account/read', { refreshToken: false });
     if (account.account?.type !== 'chatgpt') throw new ProviderError('Sign in to Codex with your ChatGPT account, then reconnect here.', 'setup');
     const limits = await rpc('account/rateLimits/read');
     let usage = null; try { usage = await rpc('account/usage/read'); } catch {}
-    return { ...normalizeCodex(limits, usage, month), plan: account.account.planType, scope: identity(limits.accountId || account.account.email || 'codex'), sourceLabel: 'Codex account connection' };
+    return { ...normalizeCodex(limits, usage, month), ...await readCodexLocal(month, ctx.codexHome), plan: account.account.planType, scope: identity(limits.accountId || account.account.email || 'codex'), sourceLabel: 'Codex account connection' };
   });
 }
 async function cursorSession(allowKeychain) {

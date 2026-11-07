@@ -28,5 +28,5 @@ export function usageValue(card) {
     models.push({...row,estimatedUSD:value,priceBasis:value===null?'Unpriced model or modality':basis,priceSource:rate?.source||null});
   }
   const empty=card.monthly===0&&!card.partial&&!(card.apiCost?.total>0);
-  return {total:priced?total:empty?0:null,models,priced,totalModels:rows.length,partial:!!card.partial||priced<rows.length||(!rows.length&&!empty),tokens,asOf:PRICE_DATE};
+  return {total:priced?total:empty?0:null,models,priced,totalModels:rows.length,partial:!!card.activityScope?.partial||!!card.partial||priced<rows.length||(!rows.length&&!empty),tokens,asOf:PRICE_DATE};
 }

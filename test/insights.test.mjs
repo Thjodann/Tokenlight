@@ -68,10 +68,10 @@ test('model aggregation preserves counts while an unknown token reading does not
  assert.equal(rows.find(m=>m.model==='test').calls,2);assert.equal(rows.find(m=>m.model==='test').valueUSD,.03);
  assert.equal(rows.find(m=>m.model==='no-tokens').tokens,null);assert.equal(rows.find(m=>m.model==='no-tokens').calls,1);
 });
-test('ranking compares measured calls rather than incompatible units and keeps age opt-in',()=>{
+test('ranking withholds winners across incompatible local and billing counts and keeps age opt-in',()=>{
  const row=activityRow({inputTokens:10,outputTokens:5,totalCents:1},'cursor','model-a',10);
  const i=monthlyInsights(snapshot([{...account,requestCount:4,monthly:1e9,modelUsage:[{...row,calls:4}]},{id:'cursor',title:'Cursor',requestCount:10,monthly:50,modelUsage:[row]},{id:'elevenlabs',title:'ElevenLabs',monthly:999999999,unit:'credits'}],{claude:{createdAt:'2020-01-01'}}));
- assert.equal(i.mostUsed.id,'cursor');assert.equal(i.favorite.model,'model-a');assert.equal(i.favorite.calls,14);assert.equal(i.callSources,2);assert.equal(i.oldest.id,'claude');
+ assert.equal(i.interactionActivity.length,2);assert.ok(i.interactionActivity.every(g=>g.sourceLeaders.length===1));assert.deepEqual(i.favorites.map(m=>m.calls).sort((a,b)=>b-a),[10,4]);assert.equal(i.callSources,2);assert.equal(i.oldest.id,'claude');
 });
 test('Cursor event deduplication and month bounds also apply to model metrics',()=>{
  const e={usageEventId:'one',timestamp:String(Date.UTC(2025,0,4)),model:'test',tokenUsage:{inputTokens:10,outputTokens:5,totalCents:2}};

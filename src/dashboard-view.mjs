@@ -1,3 +1,4 @@
+import {activityOverview} from './activity-summary.mjs';
 import { creditAmount, fableAccessText } from './credit-view.mjs';
 import { activityReading, activityCaption, balanceReading, allowanceSummary, activeAllowances, allowanceLabel, percentText, paidLimitText } from './metric-view.mjs';
 import { providerFor, providerLogo } from './provider-branding.mjs';
@@ -42,11 +43,7 @@ export function dashboardView(snapshot, requested = 'overview') {
   const nav = Object.entries(dashboardNames).map(([id, name]) => `<button type="button" data-dashboard-view="${id}" aria-label="${name}" aria-pressed="${id === view}" title="${name}"><svg viewBox="0 0 24 24" aria-hidden="true">${icons[id]}</svg><span>${name}</span></button>`).join('');
   const total = (label, value, note) => `<div class="monitor-total" title="${esc(note)}"><span>${label}</span><strong>${value}</strong><small>${esc(note)}</small></div>`;
   const summary = `<div class="monitor-totals">${total('Known cost', usd(i.total) + (i.completeSources < snapshot.cards.length ? ' <sup>*</sup>' : ''), `${i.completeSources}/${snapshot.cards.length} sources complete · before credits / tax`)}${total('Usage value', usd(i.estimatedValue) + (i.valuePartial ? ' <sup>~</sup>' : ''), 'Reported / estimated value · not an extra charge')}</div>`;
-  const highlights = `<div class="monitor-highlights">${[
-    ['Most used', i.mostUsed?.title || '—', 'Approximate activity ranking'],
-    ['Favorite model', i.favorite?.model || '—', 'Most frequent in available records'],
-    ['Longest-running', i.oldest ? `${i.oldest.title} · ${i.oldest.age.years.toFixed(1)} yr` : '—', 'Account age from entered start dates']
-  ].map(([label, value, note]) => `<span title="${esc(note)}">${label}<strong>${esc(value)}</strong></span>`).join('')}</div>`;
+  const highlights = `<div class="monitor-highlights">${activityOverview(i)}</div>`;
   const shortLabel = label => String(label).replace(/5[- ]hour(?: session)?/i, '5h').replace(/(?:1 week|7 day|weekly)/i, '7d').replace(/Fable.*$/i, 'Fable 7d').replace(/Grok \/ Composer.*$/i, 'Grok/Comp').replace(/Third-party models.*$/i, '3rd-party').replace(/Subscription.*$/i, 'Cycle').replace(/Included credits/i, 'Included');
   const groups = view === 'overview' ? providerGroups(cards) : cards.map(c => ({ provider: providerFor(c.id), title: c.title, cards: [c] }));
   const panels = groups.map(group => {
