@@ -1,7 +1,7 @@
 {
   "name": "tokenlight",
   "productName": "Tokenlight",
-  "version": "0.6.10",
+  "version": "0.6.11",
   "private": true,
   "description": "A personal desktop overview of AI account allowances and API usage.",
   "type": "module",
