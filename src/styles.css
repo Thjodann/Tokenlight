@@ -328,3 +328,14 @@ body[data-dashboard=true] #main{padding:0;overflow:hidden;scrollbar-gutter:auto}
 .desk-provider-rows .desk-reading .desk-stream-label{display:inline-block;margin:0 6px 0 0;vertical-align:baseline}.desk-provider-rows .desk-row-plot{height:10px;margin-top:2px}
 /* Keep primary activity readable when a grouped compact source has several pools. */
 @container(max-height:290px){.wide-provider .wide-instrument{gap:2px;padding-block:4px}.wide-provider .instrument-reading{flex:none;font-size:15px;line-height:1.1}.wide-provider .instrument-heading,.wide-provider .instrument-credit{flex:none;line-height:1.1}.wide-provider .instrument-pools{gap:2px}.wide-provider .metric-limit{line-height:1.15}}
+
+/* Allowance severity always follows provider usage, including an empty remaining meter. */
+[data-allowance-state="warning"] { --allowance-severity: var(--warning); }
+[data-allowance-state="critical"] { --allowance-severity: var(--danger); }
+:is(.metric-limit,.allotment-limit)[data-allowance-state="warning"] strong,
+:is(.metric-limit,.allotment-limit)[data-allowance-state="critical"] strong,
+.monitor-ring-legend [data-allowance-state="warning"] b,
+.monitor-ring-legend [data-allowance-state="critical"] b { color: var(--allowance-severity); }
+.allotment-ring[data-allowance-state="warning"] .allotment-fill,.allotment-ring[data-allowance-state="critical"] .allotment-fill,.dial-ring[data-allowance-state="warning"] .dial-fill,.dial-ring[data-allowance-state="critical"] .dial-fill { stroke: var(--allowance-severity); }
+.metric-limit[data-allowance-state="warning"] .metric-limit-fill,.metric-limit[data-allowance-state="critical"] .metric-limit-fill { fill: var(--allowance-severity); }
+.monitor-allowance-mode { color: var(--muted); font-size: 8px; }

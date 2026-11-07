@@ -30,6 +30,7 @@ class Service {
     let defaultPath = null; try { await fs.access(candidate); defaultPath = candidate; } catch {}
     this.settings = { secretsPath: defaultPath, targets: {}, refreshMinutes: 5, automaticUpdates: true, keychainAllowed: {}, colorMode: 'auto', ...await this.read('settings.json', {}) };
     this.demo ||= this.settings.demoMode === true;
+    this.settings.showRemainingAllowance = this.settings.showRemainingAllowance === true;
     this.settings.automaticUpdates = this.settings.automaticUpdates !== false;
     this.settings.colorMode = normalizeColorMode(this.settings.colorMode);
     this.settings.layoutMode = normalizeLayout(this.settings.layoutMode);
@@ -55,7 +56,7 @@ class Service {
     });
     return { updates: updates?.snapshot() || null, month, demo: this.demo, cards, version: app.getVersion(), updatedAt: Date.now(), fileError: this.demo ? null : this.fileError, vaultError: this.demo ? null : this.vaultError,
       claudeSignIn: this.demo ? null : this.claudeSignIn || null, appearance: { dark: nativeTheme.shouldUseDarkColors },
-      settings: sample ? demoData.demoSettings(this.settings, sample) : { secretsPath: this.settings.secretsPath, refreshMinutes: this.settings.refreshMinutes, colorMode: this.settings.colorMode, layoutMode: this.settings.layoutMode, accountProfiles: this.settings.accountProfiles || {}, targets: this.settings.targets, savedKeys: Object.keys(this.vault) } };
+      settings: sample ? demoData.demoSettings(this.settings, sample) : { secretsPath: this.settings.secretsPath, refreshMinutes: this.settings.refreshMinutes, showRemainingAllowance: this.settings.showRemainingAllowance, colorMode: this.settings.colorMode, layoutMode: this.settings.layoutMode, accountProfiles: this.settings.accountProfiles || {}, targets: this.settings.targets, savedKeys: Object.keys(this.vault) } };
   }
   async setAccountProfile(id, value) {
     this.requireLive();
@@ -101,6 +102,18 @@ class Service {
       updates.setAutomatic(enabled); this.emit(); return this.snapshot();
     });
     return this.updateWrites;
+  }
+  async setShowRemainingAllowance(enabled) {
+    if (typeof enabled !== 'boolean') throw new Error('Choose whether to show remaining allowance.');
+    this.allowanceWrites = (this.allowanceWrites || Promise.resolve()).catch(() => {}).then(async () => {
+      const previous = this.settings.showRemainingAllowance;
+      this.settings.showRemainingAllowance = enabled;
+      this.emit();
+      try { await this.persist('settings.json', this.settings); }
+      catch (error) { this.settings.showRemainingAllowance = previous; this.emit(); throw error; }
+      this.emit(); return this.snapshot();
+    });
+    return this.allowanceWrites;
   }
   async setLayoutMode(mode) {
     if (!LAYOUTS.includes(mode)) throw new Error('Choose Dashboard or Mini.');
@@ -250,6 +263,7 @@ app.whenReady().then(async () => {
   handle('set-window-view', (entry, view) => { dashboards.setView(entry, view); return service.snapshot(entry.month); }, true);
   handle('new-dashboard-window', async entry => { await createWindow(entry); return null; });
   handle('set-appearance', (_entry, mode) => service.setColorMode(mode));
+  handle('set-remaining-allowance', (_entry, enabled) => service.setShowRemainingAllowance(enabled));
   handle('set-layout', (_entry, mode) => service.setLayoutMode(mode));
   handle('set-account-profile', (_entry, id, value) => service.setAccountProfile(id, value));
   nativeTheme.on('updated', () => { for (const e of dashboards.entries.values()) e.window.setBackgroundColor(backgroundColor(nativeTheme.shouldUseDarkColors)); service.emit(); });

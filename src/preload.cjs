@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('tokenlight', {
   automaticUpdates: enabled => invoke('set-auto-updates', enabled), releaseNotes: () => invoke('open-release-notes'),
   onUpdates: callback => { const listener = () => callback(); ipcRenderer.on('show-updates', listener); return () => ipcRenderer.removeListener('show-updates', listener); },
   appearance: mode => invoke('set-appearance', mode),
+  remainingAllowance: enabled => invoke('set-remaining-allowance', enabled),
   layout: mode => invoke('set-layout', mode),
   accountProfile: (id, value) => invoke('set-account-profile', id, value),
   saveKey: (id, key) => invoke('save-key', id, key), target: (id, value) => invoke('set-target', id, value),

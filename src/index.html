@@ -38,6 +38,8 @@
   <dialog id="connections-dialog" aria-labelledby="connections-title">
     <div class="dialog-header"><div><span class="eyebrow">DATA SOURCES</span><h2 id="connections-title">Connections</h2></div><button class="icon-button" data-close="connections-dialog" aria-label="Close connections">✕</button></div>
     <div class="dialog-content">
+      <h3>Settings</h3>
+      <label class="update-preference"><input id="remaining-allowance" type="checkbox"><span>Show remaining allowance</span></label>
       <div class="demo-option screenshot-demo"><div><strong>Demo mode</strong><p id="demo-description">Randomized data for screenshots. Live reads pause in every window. Stays on until you turn it off.</p></div><button class="button demo-switch" id="demo-button" role="switch" aria-checked="false" aria-label="Demo mode" aria-describedby="demo-description">Off</button></div>
       <button class="button button-quiet" id="demo-randomize" hidden>Randomize sample data</button>
       <p class="dialog-intro">Connect an existing desktop account or a usage-reporting key. Tokenlight only reads usage; it doesn’t run prompts or change your billing.</p>

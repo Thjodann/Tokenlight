@@ -1,4 +1,4 @@
-import { activeAllowances, allowanceLabel, percentText } from './metric-view.mjs';
+import { activeAllowances, allowanceLabel, percentText, allowanceState, allowancePercent, allowanceReading } from './metric-view.mjs';
 import { finite, formatCount, resetCountdown } from './model.mjs';
 import { creditAmount } from './credit-view.mjs';
 import { esc } from './insight-view.mjs';
@@ -24,19 +24,21 @@ export function allowanceAmount(pool) {
   if (pool.unit === 'USD') return `${creditAmount(pool.used, pool.unit)} / ${creditAmount(pool.limit, pool.unit)}`;
   return `${formatCount(pool.used)} / ${formatCount(pool.limit)} ${pool.unit}`;
 }
-export function allowanceDial(pools) {
+export function allowanceDial(pools, remaining = false) {
+  pools = pools.filter(pool => finite(pool.percent));
   const rings = pools.map((pool, index) => {
     const radius = 88 - index * (pools.length <= 3 ? 18 : 55 / Math.max(1, pools.length - 1));
-    return `<g class="allotment-ring" data-ring="${index}" data-percent="${pool.percent}" stroke-width="${index === 0 ? 10.5 : index === pools.length - 1 ? 3 : 9}"><title>${esc(pool.label)}: ${percentText(pool.percent)}% used</title>${dialSegments(pool.percent, radius, index === 0 ? 12 : 1).map(s => `<path class="allotment-track" d="${s.track}"/>${s.fill ? `<path class="allotment-fill" d="${s.fill}"/>` : ''}`).join('')}</g>`;
+    return `<g class="allotment-ring" data-allowance-state="${allowanceState(pool.percent)}" data-ring="${index}" data-percent="${allowancePercent(pool.percent, remaining)}" stroke-width="${index === 0 ? 10.5 : index === pools.length - 1 ? 3 : 9}"><title>${esc(pool.label)}: ${allowanceReading(pool.percent, remaining)}</title>${dialSegments(allowancePercent(pool.percent, remaining), radius, index === 0 ? 12 : 1).map(s => `<path class="allotment-track" d="${s.track}"/>${s.fill ? `<path class="allotment-fill" d="${s.fill}"/>` : ''}`).join('')}</g>`;
   }).join('');
   const primary = pools[0];
   const label = primary ? primary.label.replace('5-hour session', '5-hour').replace(' · cycle', '').replace('Subscription cycle', 'This cycle') : 'Allowance';
-  return `<figure class="allotment-dial" aria-label="${esc(pools.map(p => p.label + ': ' + percentText(p.percent) + '% used').join('; ') || 'Current allowance not reported')}"><svg viewBox="0 0 200 200" aria-hidden="true">${rings || dialSegments(0).map(s => `<path class="allotment-track is-unreported" d="${s.track}"/>`).join('')}</svg><figcaption><strong>${primary ? percentText(primary.percent) + '<small>%</small>' : '—'}</strong><span>${primary ? 'used' : 'Not reported'}</span></figcaption><span class="allotment-dial-caption">${esc(label)}</span></figure>`;
+  return `<figure class="allotment-dial" aria-label="${esc(pools.map(p => p.label + ': ' + allowanceReading(p.percent, remaining)).join('; ') || 'Current allowance not reported')}"><svg viewBox="0 0 200 200" aria-hidden="true">${rings || dialSegments(0).map(s => `<path class="allotment-track is-unreported" d="${s.track}"/>`).join('')}</svg><figcaption><strong>${primary ? percentText(allowancePercent(primary.percent, remaining)) + '<small>%</small>' : '—'}</strong><span>${primary ? remaining ? 'remaining' : 'used' : 'Not reported'}</span></figcaption><span class="allotment-dial-caption">${esc(label)}</span></figure>`;
 }
-export function allowanceLegend(pools) {
+export function allowanceLegend(pools, remaining = false) {
+  pools = pools.filter(pool => finite(pool.percent));
   if (!pools.length) return '<div class="allotment-unreported"><span>Allowance not reported</span><small>No fixed token budget supplied</small></div>';
   return `<div class="allotment-legend">${pools.map((pool, index) => {
     const amount = allowanceAmount(pool), reset = pool.resetsAt ? 'Resets ' + resetCountdown(pool.resetsAt) : 'Reset not reported';
-    return `<div class="allotment-limit" data-ring="${index}" title="${esc(pool.card.title)} · ${esc(pool.label)} · ${percentText(pool.percent)}% used${amount ? ' · ' + esc(amount) : ''} · ${esc(reset)}"><i aria-hidden="true"></i><span>${esc(pool.label)}<small>${esc(amount ? amount + ' · ' + reset : reset)}</small></span><strong>${percentText(pool.percent)}<small>% used</small></strong></div>`;
+    return `<div class="allotment-limit" data-allowance-state="${allowanceState(pool.percent)}" data-ring="${index}" title="${esc(pool.card.title)} · ${esc(pool.label)} · ${allowanceReading(pool.percent, remaining)}${amount ? ' · ' + esc(amount) : ''} · ${esc(reset)}"><i aria-hidden="true"></i><span>${esc(pool.label)}<small>${esc((remaining && pool.percent > 100 ? percentText(pool.percent) + '% used · ' : '') + (amount ? amount + (remaining ? ' used' : '') + ' · ' + reset : reset))}</small></span><strong>${percentText(allowancePercent(pool.percent, remaining))}<small>% ${remaining ? 'remaining' : 'used'}</small></strong></div>`;
   }).join('')}</div>`;
 }

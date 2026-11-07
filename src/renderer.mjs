@@ -5,7 +5,7 @@ import { wideView, WIDE_QUERY, instrumentLayout } from './wide-view.mjs';
 import { providerFor, providerLogo } from './provider-branding.mjs';
 import { miniView, MINI_QUERY } from './mini-view.mjs';
 import { creditSection, claudeConnectionSection } from './credit-view.mjs';
-import { activityReading, activityCaption, allowanceMarkup, balanceMarkup } from './metric-view.mjs';
+import { activityReading, activityCaption, allowanceReading, allowanceMarkup, balanceMarkup } from './metric-view.mjs';
 import { brandMark } from './brand.mjs';
 import { SOURCES, currentMonth, formatCount, finite, resetCountdown } from './model.mjs';
 const compactQuery = window.matchMedia(MINI_QUERY);
@@ -25,16 +25,7 @@ function reset(ms, long = false) {
   return resetCountdown(ms);
 }
 const hasReading = c => finite(c.monthly) || c.windows?.length > 0 || finite(c.lastUpdatedAt);
-const activeWindow = c => c.windows?.find(w => !w.resetsAt || w.resetsAt > Date.now());
-const poolPercent = n => new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(n);
-function allowancePools(windows) {
-  return `<div class="allowance-pools">${windows.map(w => `<div class="allowance-pool ${w.percent >= 95 ? 'high' : w.percent >= 80 ? 'warning' : ''}"><div class="pool-heading"><span>${esc(w.label)}</span><strong>${poolPercent(w.percent)}% used</strong></div><svg class="pool-track" viewBox="0 0 100 3" preserveAspectRatio="none" role="img" aria-label="${esc(w.label)}: ${poolPercent(w.percent)} percent used"><rect class="pool-background" width="100" height="3"/><rect class="pool-fill" width="${Math.min(100, Math.max(0, w.percent))}" height="3"/></svg><span class="pool-reset">${Number.isFinite(w.resetsAt) ? 'Resets ' + reset(w.resetsAt) : 'Reset not reported'}</span></div>`).join('')}</div>`;
-}
-function gauge(percent, label) {
-  if (!finite(percent)) return '';
-  const fill = Math.max(0, Math.min(percent, 100)) * 1.25664;
-  return `<div class="gauge ${percent >= 95 ? 'high' : percent >= 80 ? 'warning' : ''}" role="img" aria-label="${esc(label)}: ${Math.round(percent)} percent used"><svg viewBox="0 0 48 48" aria-hidden="true"><circle class="gauge-track" cx="24" cy="24" r="20"/><circle class="gauge-progress" cx="24" cy="24" r="20" stroke-dasharray="${fill} 125.664"/></svg><span>${Math.round(percent)}%</span></div>`;
-}
+
 function chart(c) {
   if (!c.daily?.length) return `<div class="trend-empty">${c.historyNote ? 'Monthly history unavailable' : c.monthly === 0 ? 'No usage reported this month' : 'Daily history isn’t available for this source'}</div>`;
   const max = Math.max(1, ...c.daily.map(d => d.value)), days = new Date(Number(snapshot.month.slice(0, 4)), Number(snapshot.month.slice(5)), 0).getDate();
@@ -58,7 +49,7 @@ function card(c) {
     return `<article class="source-card source--${c.id} ${loading ? 'is-loading' : ''}" data-provider="${providerFor(c.id)}" aria-label="${c.title}">${header}<div class="setup-body">${loading ? '<span class="skeleton-value" aria-hidden="true"></span><p class="setup-title">Reading your usage…</p><p class="setup-description">Connecting directly to this source.</p>' : `<span class="setup-glyph" aria-hidden="true">⌁</span><p class="setup-title">${setup ? c.id === 'claude' ? 'Reconnect Claude Code' : 'A little setup needed' : 'Ready when you are'}</p><p class="setup-description">${esc(c.error || c.description)}</p><button class="button" data-action="details" data-id="${c.id}">${c.id === 'claude' ? 'Connect account' : c.kind === 'api' ? 'Set up usage access' : 'Connect account'} <span aria-hidden="true">↗</span></button>`}</div><div class="card-footer"><span>${loading ? 'Checking connection' : 'No usage inferred'}</span><span>${c.kind === 'api' ? 'Reporting key' : 'Desktop account'}</span></div></article>`;
   }
   const monthly = finite(c.monthly);
-  return `<article class="source-card source--${c.id} ${loading ? 'is-loading' : ''}" data-provider="${providerFor(c.id)}" aria-label="${c.title}">${header}<div class="metric-row"><div><div class="metric-value" title="${esc(fullCount(c.monthly))}">${esc(activityReading(c))}</div><p class="metric-label">Activity · ${esc(activityCaption(c, snapshot.month))}</p></div></div><section class="metric-allowance-readings" aria-label="Allowances · current"><h4>Allowances · current</h4>${allowanceMarkup(c)}</section><section class="metric-balance-readings" aria-label="Balances · current"><h4>Balances · current</h4>${balanceMarkup(c)}</section>${cardCosts(c, snapshot)}${chart(c)}<div class="trend-label"><span>01 ${new Date(snapshot.month + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }).toUpperCase()}</span><span>DAILY ACTIVITY · UTC</span></div>${c.monthlyTarget ? `<div class="window-row"><strong>${formatCount(c.monthlyTarget)} ${esc(c.unit)}</strong><span>monthly target · entered locally</span></div>` : ''}<div class="card-footer"><span class="status-text"><i class="status-dot ${stale ? 'stale' : ''}"></i>${stale ? 'Last reading · offline or delayed' : loading ? 'Refreshing' : since(c.lastUpdatedAt)}</span>${c.partial ? '<span class="source-note">Partial history</span>' : `<span>${snapshot.demo ? 'Sample data' : 'Source connected'}</span>`}</div></article>`;
+  return `<article class="source-card source--${c.id} ${loading ? 'is-loading' : ''}" data-provider="${providerFor(c.id)}" aria-label="${c.title}">${header}<div class="metric-row"><div><div class="metric-value" title="${esc(fullCount(c.monthly))}">${esc(activityReading(c))}</div><p class="metric-label">Activity · ${esc(activityCaption(c, snapshot.month))}</p></div></div><section class="metric-allowance-readings" aria-label="Allowances · current"><h4>Allowances · current</h4>${allowanceMarkup(c, snapshot.settings?.showRemainingAllowance)}</section><section class="metric-balance-readings" aria-label="Balances · current"><h4>Balances · current</h4>${balanceMarkup(c)}</section>${cardCosts(c, snapshot)}${chart(c)}<div class="trend-label"><span>01 ${new Date(snapshot.month + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }).toUpperCase()}</span><span>DAILY ACTIVITY · UTC</span></div>${c.monthlyTarget ? `<div class="window-row"><strong>${formatCount(c.monthlyTarget)} ${esc(c.unit)}</strong><span>monthly target · entered locally</span></div>` : ''}<div class="card-footer"><span class="status-text"><i class="status-dot ${stale ? 'stale' : ''}"></i>${stale ? 'Last reading · offline or delayed' : loading ? 'Refreshing' : since(c.lastUpdatedAt)}</span>${c.partial ? '<span class="source-note">Partial history</span>' : `<span>${snapshot.demo ? 'Sample data' : 'Source connected'}</span>`}</div></article>`;
 }
 function fitInstruments() {
   const mini = document.querySelector('.mini-list');
@@ -159,7 +150,7 @@ function renderDetails() {
   $('#details-logo').innerHTML = providerLogo(c.id);
   $('#details-title').textContent = c.title; $('#details-provider').textContent = c.kind === 'account' ? `${c.organization} · AI account` : `${c.organization} · API connection`;
   const metric = finite(c.monthly) ? `<div class="detail-reading"><div class="detail-stat"><span>${esc(monthName(snapshot.month))} · ${c.id === 'claude' ? 'local logs' : 'UTC'}</span><strong>${fullCount(c.monthly)} <small>${esc(c.unit)}</small></strong></div><div class="detail-stat"><span>Last successful reading</span><strong>${since(c.lastUpdatedAt)}</strong></div></div>` : '';
-  const windows = (c.windows || []).map(w => `<div class="detail-window"><span>${esc(w.label)} <strong>${w.pool ? poolPercent(w.percent) : Math.round(w.percent)}% used</strong></span><small>${reset(w.resetsAt, true)}</small></div>`).join('');
+  const windows = (c.windows || []).map((w, index) => `<div class="detail-window"><span>${esc(w.label)} <strong data-allowance-index="${index}">${allowanceReading(w.percent, snapshot.settings?.showRemainingAllowance)}</strong></span><small>${reset(w.resetsAt, true)}</small></div>`).join('');
   const credentials = c.kind === 'api' ? `<div class="detail-section"><h3>${['elevenlabs', 'ollama'].includes(c.id) ? 'API key' : 'Usage-reporting key'}</h3><p>${c.id === 'ollama' ? 'Use your Ollama Cloud API key. Usage and balance are read without generating model requests.' : c.id === 'elevenlabs' ? 'Use a key with access to subscription and usage data.' : 'Organization usage reporting needs an admin credential. A normal key used for prompts may not have access.'}</p><form id="key-form"><label for="provider-key">${c.id === 'openai' ? 'OPENAI_ADMIN_KEY' : c.id === 'anthropic' ? 'ANTHROPIC_ADMIN_KEY' : c.id === 'ollama' ? 'OLLAMA_CLOUD_API_KEY' : 'ELEVENLABS_API_KEY'}</label><div class="input-row"><input id="provider-key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste a new key" minlength="12" required ${snapshot.demo ? 'disabled' : ''}><button class="button button-primary" type="submit" ${snapshot.demo ? 'disabled' : ''}>Save securely</button></div></form><p class="input-help">Encrypted with macOS secure storage. Keys are never included in exports. Your existing secrets file is also supported.</p><button class="text-link" data-action="credentials" data-id="${c.id}">Open provider key settings ↗</button></div>` : `<div class="detail-section"><h3>Your desktop account</h3><p>${c.id === 'claude' ? 'Tokenlight follows Claude Code’s current session and checks again when you return or wake your Mac. If Claude requires renewal, Sign in opens your browser and reconnects automatically. macOS may ask you to allow Keychain access.' : c.id === 'cursor' ? 'Reads your current Cursor desktop session without changing it. If sign-in has expired, sign in again in Cursor and reconnect here.' : 'Reads your Codex account through the bundled helper. Sign in to Codex with ChatGPT if the connection needs setup.'}</p><div class="detail-actions">${c.id === 'claude' ? `<button class="button button-primary" data-action="signin" data-id="claude" ${snapshot.claudeSignIn?.pending ? 'disabled' : ''}>${snapshot.claudeSignIn?.pending ? 'Waiting for sign-in…' : 'Sign in to Claude Code'}</button>` : ''}<button class="button" data-action="connect" data-id="${c.id}">Connect${hasReading(c) ? ' again' : ''}</button></div></div>`;
   $('#details-content').innerHTML = `<p class="detail-description">${esc(c.description)}</p>${snapshot.demo ? '<div class="detail-notice">Sample data is active. Leave the preview to verify a live connection.</div>' : c.error ? `<div class="detail-notice error">${esc(c.error)}</div>` : ''}${c.id === 'claude' && snapshot.claudeSignIn ? `<div class="detail-notice ${snapshot.claudeSignIn.error ? 'error' : ''}" role="status">${esc(snapshot.claudeSignIn.message)}</div>` : ''}${claudeConnectionSection(c)}${metric}${windows}${creditSection(c, true)}${c.creditNote ? `<p class="detail-description">${esc(c.creditNote)}</p>` : ''}${c.costNote ? `<div class="detail-notice">${esc(c.costNote)}</div>` : ''}${c.allowanceNote ? `<p class="detail-description">${esc(c.allowanceNote)}</p>` : ''}${c.id === 'ollama' && (finite(c.rollingRequests) || finite(c.rollingUsageUsd)) ? `<p class="detail-description">Available rolling history: ${finite(c.rollingRequests) ? formatCount(c.rollingRequests) + ' requests' : 'request count unavailable'}${finite(c.rollingUsageUsd) ? ' · $' + c.rollingUsageUsd.toFixed(2) + ' usage value' : ''}</p>` : ''}${!c.creditBalances?.length && c.balanceSummary ? `<p class="detail-description">${esc(c.balanceSummary)}</p>` : ''}${c.breakdown ? `<div class="metric-list">Input <strong>${formatCount(c.breakdown.input)}</strong> Output <strong>${formatCount(c.breakdown.output)}</strong> Cache <strong>${formatCount(c.breakdown.cache)}</strong></div>` : ''}${c.coverage ? `<p class="detail-description">${esc(c.coverage)}</p>` : ''}${c.historyNote ? `<div class="detail-notice">${esc(c.historyNote)}</div>` : ''}${c.connectionNote ? `<p class="input-help">${esc(c.connectionNote)}</p>` : ''}${c.asOf ? `<p class="input-help">Provider data refreshed: ${esc(new Date(c.asOf).toLocaleString())}</p>` : ''}${financeDetails(c,snapshot)}${credentials}<div class="detail-section"><h3>Optional monthly target</h3><p>Your own reference point for ${c.id === 'claude' ? 'tokens recorded on this Mac' : c.id === 'elevenlabs' ? 'credits' : 'tokens'}. This does not change provider limits or stop usage.</p><form id="target-form"><label for="monthly-target">${c.id === 'elevenlabs' ? 'Credits' : 'Tokens'} per calendar month</label><div class="input-row"><input id="monthly-target" type="number" min="1" max="9007199254740991" step="1" placeholder="No target" value="${c.monthlyTarget || ''}"><button class="button" type="submit">Save target</button></div></form><p class="input-help">Clear the field to remove your target.</p></div><div class="detail-actions"><button class="button" data-action="dashboard" data-id="${c.id}">Open usage dashboard ↗</button><button class="button button-quiet" data-action="refresh-source" data-id="${c.id}">Refresh this source</button></div>`;
   for (const form of document.querySelectorAll('.local-profile-form')) form.addEventListener('submit', async e => {
@@ -185,7 +176,33 @@ function renderDetails() {
   if (snapshot.demo) for (const field of $('#details-content').querySelectorAll('input, button[type=submit], [data-action=connect], [data-action=signin]')) field.disabled = true;
   $('#details-content').addEventListener('input', () => { detailDirty = true; }, { once: true });
 }
-function update(value) { if (value?.cards) { if (value.presentation?.dashboard) view = value.presentation.view; const signInChanged = snapshot?.claudeSignIn?.message !== value.claudeSignIn?.message; if (snapshot && snapshot.demo !== value.demo) { detailDirty = false; $('#details-dialog').close(); $('#details-content').replaceChildren(); $('#toast').hidden = true; $('#toast').textContent = ''; } snapshot = value; document.documentElement.dataset.theme = value.appearance?.dark ? 'dark' : 'light'; $('#appearance-mode').value = value.settings.colorMode || 'auto'; render(); if (signInChanged && selected === 'claude' && $('#details-dialog').open && !detailDirty) renderDetails(); } }
+function update(value) {
+  if (!value?.cards) return;
+  if (value.presentation?.dashboard) view = value.presentation.view;
+  const signInChanged = snapshot?.claudeSignIn?.message !== value.claudeSignIn?.message;
+  const allowanceChanged = snapshot?.settings?.showRemainingAllowance !== value.settings.showRemainingAllowance;
+  if (snapshot && snapshot.demo !== value.demo) {
+    detailDirty = false;
+    $('#details-dialog').close();
+    $('#details-content').replaceChildren();
+    $('#toast').hidden = true;
+    $('#toast').textContent = '';
+  }
+  snapshot = value;
+  // Update just the readings so an open source form keeps its unsaved edits.
+  if (allowanceChanged && $('#details-dialog').open) {
+    const windows = snapshot.cards.find(c => c.id === selected)?.windows || [];
+    for (const el of document.querySelectorAll('[data-allowance-index]')) {
+      el.textContent = allowanceReading(windows[Number(el.dataset.allowanceIndex)]?.percent, snapshot.settings.showRemainingAllowance);
+    }
+  }
+  $('#remaining-allowance').checked = value.settings.showRemainingAllowance === true;
+  document.documentElement.dataset.theme = value.appearance?.dark ? 'dark' : 'light';
+  $('#appearance-mode').value = value.settings.colorMode || 'auto';
+  render();
+  if (signInChanged && selected === 'claude' && $('#details-dialog').open && !detailDirty) renderDetails();
+}
+
 function notify(message, error = false) { const toast = $('#toast'), modal = [...document.querySelectorAll('dialog[open]')].at(-1); clearTimeout(toastTimer); (modal || document.body).append(toast); toast.classList.toggle('in-dialog', !!modal); toast.textContent = message; toast.hidden = false; toast.classList.toggle('error', error); toastTimer = setTimeout(() => { toast.hidden = true; }, error ? 6500 : 4000); }
 async function run(fn) { try { const value = await fn(); if (value?.cards) update(value); else if (typeof value === 'string') notify(value); return value; } catch (e) { notify(e.message || 'The action could not finish.', true); return null; } }
 async function action(name, id) {
@@ -213,6 +230,7 @@ $('#restart-update').addEventListener('click', () => run(() => api.restartUpdate
 $('#release-notes').addEventListener('click', () => run(() => api.releaseNotes()));
 $('#automatic-updates').addEventListener('change', async () => { const value = $('#automatic-updates').checked; await run(() => api.automaticUpdates(value)); renderUpdates(); });
 $('#connections-button').addEventListener('click', showConnections);
+$('#remaining-allowance').addEventListener('change', async () => { await run(() => api.remainingAllowance($('#remaining-allowance').checked)); $('#remaining-allowance').checked = snapshot.settings.showRemainingAllowance === true; });
 $('#appearance-mode').addEventListener('change', () => run(() => api.appearance($('#appearance-mode').value)));
 $('#refresh-button').addEventListener('click', () => run(() => api.refresh()));
 $('#choose-secrets').addEventListener('click', () => run(() => api.chooseSecrets()));

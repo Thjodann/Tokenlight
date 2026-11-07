@@ -88,9 +88,11 @@ test('main bootstrap keeps kiosk IPC read-only and display windows alive after m
   assert.equal((await call(main, 'new-dashboard-window')).ok, true);
   const kiosk = windows[1], display = (await call(kiosk, 'get-snapshot')).value;
   assert.equal(display.presentation.view, 'api'); assert.equal(display.month, '2026-10'); assert.equal(display.presentation.dashboard, true);
-  for (const channel of ['set-appearance', 'set-layout', 'set-account-profile', 'refresh', 'set-month', 'save-key', 'set-target', 'choose-secrets', 'open-provider', 'connect', 'demo', 'sign-in-claude', 'export', 'new-dashboard-window', 'check-updates', 'set-auto-updates', 'restart-update', 'open-release-notes']) {
+  for (const channel of ['set-remaining-allowance', 'set-appearance', 'set-layout', 'set-account-profile', 'refresh', 'set-month', 'save-key', 'set-target', 'choose-secrets', 'open-provider', 'connect', 'demo', 'sign-in-claude', 'export', 'new-dashboard-window', 'check-updates', 'set-auto-updates', 'restart-update', 'open-release-notes']) {
     assert.equal((await call(kiosk, channel)).ok, false, `${channel} must reject a kiosk caller before doing work`);
   }
+  assert.equal((await call(main, 'set-remaining-allowance', 'true')).ok, false);
+  assert.equal((await handlers.get('set-remaining-allowance')({ sender: main.webContents, senderFrame: {} }, true)).ok, false);
   const switched = await call(kiosk, 'set-window-view', 'account');
   assert.equal(switched.ok, true); assert.equal(switched.value.presentation.view, 'account');
   assert.equal(switched.value.settings.secretsPath, undefined);

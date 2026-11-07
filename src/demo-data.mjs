@@ -64,6 +64,6 @@ export function createDemoData(month, now, seed) {
 }
 
 export function demoSettings(settings, data) {
-  return { secretsPath: null, refreshMinutes: 5, colorMode: settings.colorMode, layoutMode: settings.layoutMode,
+  return { secretsPath: null, refreshMinutes: 5, showRemainingAllowance: settings.showRemainingAllowance === true, colorMode: settings.colorMode, layoutMode: settings.layoutMode,
     accountProfiles: data.accountProfiles, targets: data.targets, savedKeys: [], demoMode: true };
 }
