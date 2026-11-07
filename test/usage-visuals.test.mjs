@@ -18,7 +18,7 @@ test('graph labels are escaped and monetary charts keep value separate from know
  const html = insightGraphics(s);
  assert.doesNotMatch(html, /<script>/); assert.match(html, /&lt;script&gt;/);
  assert.match(html, /Known cost/); assert.match(html, /Usage value/); assert.match(html, /not an extra charge/);
- assert.match(html, /visual-unknown/); assert.match(html, /rankings approximate/);
+ assert.match(html, /visual-unknown/); assert.match(html, /no global ranking/);
 });
 
 test('sparklines preserve gaps, observed zeroes and missing history', async () => {

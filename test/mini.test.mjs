@@ -82,5 +82,5 @@ test('Mini filters account/API rows and provides a compact Insights summary',()=
  const cards=demoCards('2026-10'),snapshot={month:'2026-10',demo:true,cards,settings:{}};
  assert.equal((miniView(snapshot,'account').match(/class="mini-row /g)||[]).length,3);
  assert.equal((miniView(snapshot,'api').match(/class="mini-row /g)||[]).length,4);
- const insights=miniView(snapshot,'insights');assert.match(insights,/Mini insights/);assert.match(insights,/Known monthly cost/);assert.match(insights,/Favorite model/);
+ const insights=miniView(snapshot,'insights');assert.match(insights,/Mini insights/);assert.match(insights,/Known monthly cost/);assert.match(insights,/Model tokens/);
 });
