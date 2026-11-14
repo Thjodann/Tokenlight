@@ -14,8 +14,8 @@ test('mini balance stays a balance even when the paid cap is reached', () => {
 });
 import layout from '../src/layout.cjs';
 
-test('all seven sources share five original, self-contained provider marks', () => {
-  assert.equal(new Set(SOURCES.map(s => providerFor(s.id))).size, 5);
+test('all eight sources share six original, self-contained provider marks', () => {
+  assert.equal(new Set(SOURCES.map(s => providerFor(s.id))).size, 6);
   assert.equal(providerFor('codex'), providerFor('openai'));
   assert.equal(providerFor('claude'), providerFor('anthropic'));
   for (const [id, mark] of Object.entries(MARKS)) {
@@ -48,7 +48,7 @@ test('mini metrics retain zero, units, incomplete history and unknown values', (
 test('mini rows keep every source actionable, named and labeled as sample, partial or stale', () => {
   const cards = demoCards('2026-10'); cards[0].status = 'stale'; cards[0].error = '<script>bad</script>';
   const html = miniView({ month: '2026-10', demo: true, cards });
-  assert.equal((html.match(/class="mini-row /g) || []).length, 7);
+  assert.equal((html.match(/class="mini-row /g) || []).length, 8);
   for (const c of cards) assert.ok(html.includes(`Details for ${c.title}:`));
   assert.match(html, /SAMPLE DATA/); assert.match(html, /partial history/); assert.match(html, /Last reading · stale/);
   assert.doesNotMatch(html, /<script>/); assert.match(html, /&lt;script&gt;/);
@@ -80,7 +80,7 @@ test('entering explicit Mini from an automatic compact window still lets Full ex
 
 test('Mini filters account/API rows and provides a compact Insights summary',()=>{
  const cards=demoCards('2026-10'),snapshot={month:'2026-10',demo:true,cards,settings:{}};
- assert.equal((miniView(snapshot,'account').match(/class="mini-row /g)||[]).length,3);
- assert.equal((miniView(snapshot,'api').match(/class="mini-row /g)||[]).length,4);
+ assert.equal((miniView(snapshot,'account').match(/class="mini-row /g)||[]).length,4);
+ assert.equal((miniView(snapshot,'api').match(/class="mini-row /g)||[]).length,5);
  const insights=miniView(snapshot,'insights');assert.match(insights,/Mini insights/);assert.match(insights,/Known monthly cost/);assert.match(insights,/Model tokens/);
 });

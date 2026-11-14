@@ -14,3 +14,5 @@ Original provider assets are bundled as data URLs in src/provider-branding.mjs s
   SHA-256: ab2a93aa7f3756a87c9429e4056e6405ce9f94d5cb0aa188c19d3e4ca2d04b68
 
 The Anthropic mark was extracted from inline HTML SVG; its SVG namespace declaration is added for standalone image embedding. Its original paths and viewBox are unchanged.
+- devin: https://devin.ai/assets/brand/logos/devin/symbol-light.svg
+  SHA-256: fb82b015d94ee51a63965a64c02c991cccd6477b7fc5eea820802ca3f223afc9

@@ -13,15 +13,26 @@ export function allowanceReading(percent, remaining = false) {
 }
 
 // Presentation never substitutes a different metric for an absent provider reading.
+function activityAmount(card) {
+  if (card.unit === 'acus' && card.monthly < 1000) return card.monthly.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return formatCount(card.monthly);
+}
+function activityUnitLabel(card) {
+  if (card.unit === 'credits') return { short: 'cr', long: 'credits' };
+  if (card.unit === 'acus') return { short: 'ACU', long: 'ACU' };
+  return { short: 'tok', long: 'tokens' };
+}
 export function activityReading(card) {
-  return finite(card.monthly) ? `${card.partial ? '~' : ''}${formatCount(card.monthly)} ${card.unit === 'credits' ? 'cr' : 'tok'}` : 'Not reported';
+  const unit = activityUnitLabel(card);
+  return finite(card.monthly) ? `${card.partial ? '~' : ''}${activityAmount(card)} ${unit.short}` : 'Not reported';
 }
 export function activityCaption(card, month) {
-  const period = new Date(month + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
-  return `${period} · ${card.unit === 'credits' ? 'credits' : 'tokens'}${card.id === 'claude' ? ' · this Mac' : ''}${card.partial && finite(card.monthly) ? ' · partial' : ''}`;
+  const period = new Date(month + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'short', timeZone: card.chartZone === 'PT' ? 'Etc/GMT+8' : 'UTC' });
+  const unit = activityUnitLabel(card);
+  return `${period} · ${unit.long}${card.id === 'claude' ? ' · this Mac' : ''}${card.chartZone === 'PT' ? ' · PT' : ''}${card.partial && finite(card.monthly) ? ' · partial' : ''}`;
 }
 export function balanceReading(card) {
-  const balances = (card.creditBalances || []).filter(b => b.unit !== 'resets' && (b.unlimited || finite(b.value))).map(b => ({...b, label: creditLabel(b)}));
+  const balances = (card.creditBalances || []).filter(b => b.unit !== 'resets' && (b.unlimited || finite(b.value) || (b.unit === 'USD' && Number.isFinite(b.value)))).map(b => ({...b, label: creditLabel(b)}));
   const b = balances[0];
   const text = b ? b.unlimited ? 'Unlimited' : b.unit === 'credits' ? `${formatCount(b.value)} cr` : creditAmount(b.value, b.unit) : '—';
   const title = balances.map(b => `${b.label}: ${b.unlimited ? 'Unlimited' : creditAmount(b.value, b.unit)}${b.allowance ? ' · ' + allowanceContext(b) : ''}`).join('; ') || 'Current balance not reported';

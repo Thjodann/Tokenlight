@@ -11,6 +11,13 @@
 .desk-source-row>.metric-paid-limit,.desk-source-row>.fable-access-note { grid-column: 1 / -1; }
 /* Reserve the actual height of the extra paid-spending rows before sizing wheels. */
 .allowance-workspace .desk-provider-rows:has(.metric-paid-limit) { height: auto; }
+@media (min-width: 1200px) and (min-height: 601px) {
+  .allowance-workspace .desk-provider-rows:has(.metric-paid-limit) { min-height: 172px; }
+}
+@media (max-width: 1199px) {
+  .allowance-workspace .desk-provider:has(.metric-paid-limit) .allotment-stage { min-height: 96px; }
+  .allowance-workspace .desk-provider-rows:has(.metric-paid-limit) { min-height: 0; overflow: auto; }
+}
 @media(max-height:600px), (max-width:1199px) and (max-height:880px) {
   .desk-source-row>.fable-access-note { display: none; }
   .desk-source-row>.metric-paid-limit>small { display: none; }
@@ -41,14 +48,66 @@
   .instrument-pools .metric-paid-limit>small { display: none; }
   .instrument-pools .metric-paid-limit { padding-top: 2px; }
 }
-@media(min-height:601px) and (max-height:880px) and (min-width:1200px) {
-  .allowance-workspace .desk-provider:has(.metric-paid-limit) .allotment-stage { grid-template-columns: minmax(50px,1fr) minmax(0,1.3fr); grid-template-rows: 1fr; gap: 8px; }
-  .allowance-workspace .desk-provider:has(.metric-paid-limit) .allotment-dial { width: min(100%,140px,95cqh); }
-  .allowance-workspace .desk-provider:has(.metric-paid-limit) .allotment-dial figcaption>strong { font-size: clamp(12px,18cqh,24px); }
-  .allowance-workspace .desk-provider:has(.metric-paid-limit) .allotment-dial figcaption>span,.allowance-workspace .desk-provider:has(.metric-paid-limit) .allotment-dial-caption { display: none; }
-}
 @media(min-height:600px) and (max-height:880px) {
   .mini-row:has(.metric-paid-limit) .mini-allowances { gap: 1px; }
   .mini-row .metric-paid-limit>small { display: none; }
   .mini-row .metric-paid-limit { padding-top: 1px; }
+}
+
+/* Six Overview cards share one meter size. Labels stay beside the ring, inside the card. */
+.allowance-workspace .desk-ledger .desk-instruments[data-count="6"] .desk-provider {
+  display: grid;
+  grid-template-rows: auto minmax(112px, auto) auto minmax(0, 1fr);
+  align-content: start;
+  overflow: hidden;
+}
+.allowance-workspace .desk-ledger .desk-instruments[data-count="6"] .desk-provider .allotment-stage {
+  grid-template-columns: 112px minmax(0, 1fr);
+  grid-template-rows: minmax(112px, auto);
+  align-items: center;
+  flex: none;
+  height: auto;
+  min-height: 112px;
+  gap: 10px;
+}
+.allowance-workspace .desk-ledger .desk-instruments[data-count="6"] .desk-provider .allotment-dial {
+  width: 104px;
+  height: 104px;
+  margin: 0;
+}
+.allowance-workspace .desk-ledger .desk-instruments[data-count="6"] .desk-provider .allotment-dial figcaption > strong {
+  font-size: 22px;
+  letter-spacing: -.6px;
+}
+.allowance-workspace .desk-ledger .desk-instruments[data-count="6"] .desk-provider .allotment-dial figcaption > span {
+  display: block;
+}
+.allowance-workspace .desk-ledger .desk-instruments[data-count="6"] .desk-provider .allotment-dial-caption {
+  display: block;
+  left: 8%;
+  right: 8%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.allowance-workspace .desk-ledger .desk-instruments[data-count="6"] .allotment-legend {
+  min-width: 0;
+  justify-content: center;
+  gap: 6px;
+  padding-block: 0;
+}
+.allowance-workspace .desk-ledger .desk-instruments[data-count="6"] .allotment-limit {
+  align-items: center;
+  min-width: 0;
+}
+.allowance-workspace .desk-ledger .desk-instruments[data-count="6"] .allotment-limit > span {
+  overflow-wrap: anywhere;
+}
+.allowance-workspace .desk-ledger .desk-instruments[data-count="6"] .allotment-limit > strong {
+  flex: none;
+}
+.allowance-workspace .desk-ledger .desk-instruments[data-count="6"] .desk-provider-rows {
+  height: auto;
+  min-height: 0;
+  overflow: auto;
 }

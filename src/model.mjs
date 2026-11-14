@@ -8,6 +8,7 @@ export const SOURCES = [
   { id: 'anthropic', title: 'Anthropic API', organization: 'Anthropic', kind: 'api', color: '#b05939', initials: 'An', dashboard: 'https://platform.claude.com/usage', credentialUrl: 'https://platform.claude.com/settings/admin-keys', description: 'Organization usage, including calls made outside this app.' },
   { id: 'elevenlabs', title: 'ElevenLabs', organization: 'ElevenLabs', kind: 'api', color: '#356fb5', initials: '11', dashboard: 'https://elevenlabs.io/app/developers/analytics', credentialUrl: 'https://elevenlabs.io/app/settings/api-keys', description: 'Credit usage and your subscription’s current allowance.' },
   { id: 'ollama', title: 'Ollama Cloud', organization: 'Ollama', kind: 'api', color: '#93680d', initials: 'Ol', dashboard: 'https://ollama.com/settings', credentialUrl: 'https://ollama.com/settings/keys', description: 'Cloud token usage and your included and purchased credit balances.' },
+  { id: 'devin', title: 'Devin', organization: 'Cognition', kind: 'api', color: '#5b4dff', initials: 'Dv', dashboard: 'https://app.devin.ai/settings/usage', credentialUrl: 'https://app.devin.ai/settings', description: 'Agent Compute Unit activity, plus daily and weekly quota remaining when Devin’s usage page provides it.' },
 ];
 export const finite = x => typeof x === 'number' && Number.isFinite(x) && x >= 0;
 export function monthRange(month) {

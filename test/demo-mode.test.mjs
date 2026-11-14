@@ -29,12 +29,12 @@ function createService(providers = {}, saved = {}) {
 test('demo readings randomize independently of real data and retain coherent native units', () => {
   const first = demoData.createDemoData('2026-11', now, 'seed-a'), repeated = demoData.createDemoData('2026-11', now, 'seed-a'), next = demoData.createDemoData('2026-11', now, 'seed-b');
   assert.deepEqual(first, repeated, 'repainting or another window must not change the dataset');
-  assert.equal(first.cards.length, 7);
+  assert.equal(first.cards.length, 8);
   for (const [index, card] of first.cards.entries()) {
     assert.notEqual(card.monthly, next.cards[index].monthly);
     assert.equal(card.daily.length, 2, 'current-month samples do not invent future activity');
     assert.equal(card.monthly, card.daily.reduce((sum, day) => sum + day.value, 0));
-    assert.equal(card.unit, card.id === 'elevenlabs' ? 'credits' : 'tokens');
+    assert.equal(card.unit, card.id === 'elevenlabs' ? 'credits' : card.id === 'devin' ? 'acus' : 'tokens');
     for (const window of card.windows) assert.ok(window.percent >= 0 && window.percent <= 100);
     for (const balance of card.creditBalances) if (Number.isFinite(balance.limit)) assert.ok(Math.abs(balance.value + balance.used - balance.limit) < 0.011);
     for (const row of card.modelUsage) assert.equal(row.tokens, row.input + row.output + row.cacheRead + row.cacheWrite + row.cacheWriteLong);
@@ -120,6 +120,6 @@ test('a demo export stays synthetic if live mode resumes while its save dialog i
   await exporting;
   assert.match(chosenName, /^Tokenlight-demo-/);
   assert.equal(written[0].data.demo, true);
-  assert.equal(written[0].data.sources.length, 7);
+  assert.equal(written[0].data.sources.length, 8);
   assert.ok(!JSON.stringify(written[0]).includes('999123456'));
 });

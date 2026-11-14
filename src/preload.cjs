@@ -13,7 +13,7 @@ contextBridge.exposeInMainWorld('tokenlight', {
   accountProfile: (id, value) => invoke('set-account-profile', id, value),
   saveKey: (id, key) => invoke('save-key', id, key), target: (id, value) => invoke('set-target', id, value),
   chooseSecrets: () => invoke('choose-secrets'), openProvider: (id, purpose) => invoke('open-provider', id, purpose),
-  connect: id => invoke('connect', id), signInClaude: () => invoke('sign-in-claude'), demo: enabled => invoke('demo', enabled), export: () => invoke('export'),
+  connect: id => invoke('connect', id), signInClaude: () => invoke('sign-in-claude'), signInDevinQuota: () => invoke('sign-in-devin-quota'), demo: enabled => invoke('demo', enabled), export: () => invoke('export'),
   onSnapshot: callback => { const listener = (_e, value) => callback(value); ipcRenderer.on('snapshot', listener); return () => ipcRenderer.removeListener('snapshot', listener); },
   onConnections: callback => { const listener = () => callback(); ipcRenderer.on('show-connections', listener); return () => ipcRenderer.removeListener('show-connections', listener); }
 });

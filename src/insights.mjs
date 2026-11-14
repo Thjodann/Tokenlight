@@ -1,6 +1,6 @@
 import { finite, currentMonth, formatCount } from './model.mjs';
 import { usageValue } from './pricing.mjs';
-export const activityUnit = id => id === 'codex' ? 'local active turns' : id === 'cursor' ? 'events' : id === 'claude' ? 'local replies' : ['openai','anthropic'].includes(id) ? 'requests' : 'records';
+export const activityUnit = id => id === 'codex' ? 'local active turns' : id === 'devin' ? 'sessions' : id === 'cursor' ? 'events' : id === 'claude' ? 'local replies' : ['openai','anthropic'].includes(id) ? 'requests' : 'records';
 export const accountProfile = (settings,id) => settings?.accountProfiles?.[id] || {};
 export function monthlyFee(settings,id,month) {
   const fees=accountProfile(settings,id).fees||{}, active=Object.keys(fees).filter(k=>/^\d{4}-(0[1-9]|1[0-2])$/.test(k)&&k<=month).sort().at(-1);
@@ -18,7 +18,7 @@ export function sourceCost(card,settings,month,now=Date.now()) {
   const fee=monthlyFee(settings,card.id,month) ?? (implicitFee?0:null);
   let metered=null,basis='Not reported';
   if(finite(manual)){metered=manual;basis='Entered locally';}
-  else if(card.apiCost?.month===month&&card.apiCost.unit==='USD'&&Number.isFinite(card.apiCost.total)){metered=card.apiCost.total;basis='Provider report · before credits';}
+  else if(card.apiCost?.month===month&&card.apiCost.unit==='USD'&&Number.isFinite(card.apiCost.total)){metered=card.apiCost.total;basis=card.apiCost.basis || 'Provider report · before credits';}
   else if(month===currentMonth()&&new Date(card.lastUpdatedAt||0).toISOString().slice(0,7)===month&&card.paidUsage?.unit==='USD'&&finite(card.paidUsage.used)){metered=card.paidUsage.used;basis='Provider-reported extra usage';}
   return {id:card.id,title:card.title,fee,metered,basis,total:(fee!==null&&!implicitFee)||metered!==null?(fee??0)+(metered??0):null,partial:fee===null||metered===null,stale:card.status==='stale',value:usageValue(card),calls:finite(card.requestCount)?card.requestCount:null,activityUnit:activityUnit(card.id),activityNote:card.activityNote || (card.id==='claude'?'Local Claude replies · partial coverage; excludes other devices.':card.id==='codex'?'Local Codex model activity unavailable · partial coverage. Provider totals are separate.':null),activityPartial:!!card.activityScope?.partial || card.partial || ['codex','claude'].includes(card.id),age:accountAge(profile.createdAt,now)};
 }

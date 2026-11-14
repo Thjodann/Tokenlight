@@ -1,5 +1,5 @@
 import {activityOverview} from './activity-summary.mjs';
-import { providerGroups } from './provider-groups.mjs';
+import { providerGroups, cardsForView } from './provider-groups.mjs';
 import { allowancePools, allowanceDial, allowanceLegend } from './allowance-dial.mjs';
 import { miniReading, miniCredit } from './mini-view.mjs';
 import { activityCaption, allowanceSummary, paidUsageMarkup } from './metric-view.mjs';
@@ -18,10 +18,10 @@ function dailyChart(card, month) {
   if (!points.length) return `<div class="desk-chart-empty"><strong>${card.monthly === 0 ? 'No daily usage reported' : 'Daily history unavailable'}</strong><span>${esc(card.historyNote || 'This source has not supplied daily readings for the selected month. Its allowance and balance stay separate.')}</span></div>`;
   const max = Math.max(1, ...points.map(p => p.value));
   const bars = points.map(p => { const x = (Number(p.date.slice(8)) - .5) / days * 600, h = p.value / max * 112; return `<rect x="${x - 5}" y="${120 - Math.max(1, h)}" width="10" height="${Math.max(1, h)}" rx="1"><title>${esc(p.date)}: ${formatCount(p.value)} ${esc(card.unit || 'tokens')}</title></rect>`; }).join('');
-  return `<div class="desk-chart-scale"><span>${formatCount(max)} ${esc(card.unit || 'tokens')} / day</span><span>${points.length} reported day${points.length === 1 ? '' : 's'}</span></div><svg class="desk-chart" viewBox="0 0 600 126" preserveAspectRatio="none" role="img" aria-label="${esc(card.title)} daily reported ${esc(card.unit || 'tokens')} for ${esc(month)}. Gaps mean no reading."><path d="M0 8H600M0 64H600M0 120H600"/>${bars}</svg><div class="desk-chart-scale"><span>01</span><span>${esc(month)} · UTC · gaps are unreported</span><span>${days}</span></div>`;
+  return `<div class="desk-chart-scale"><span>${formatCount(max)} ${esc(card.unit || 'tokens')} / day</span><span>${points.length} reported day${points.length === 1 ? '' : 's'}</span></div><svg class="desk-chart" viewBox="0 0 600 126" preserveAspectRatio="none" role="img" aria-label="${esc(card.title)} daily reported ${esc(card.unit || 'tokens')} for ${esc(month)}. Gaps mean no reading."><path d="M0 8H600M0 64H600M0 120H600"/>${bars}</svg><div class="desk-chart-scale"><span>01</span><span>${esc(month)} · ${card.chartZone === 'PT' ? 'PT' : 'UTC'} · gaps are unreported</span><span>${days}</span></div>`;
 }
 export function desktopView(snapshot, view, context, selectedId) {
-  const cards = snapshot.cards.filter(c => view === 'overview' || c.kind === view), i = monthlyInsights(snapshot);
+  const cards = cardsForView(snapshot, view), i = monthlyInsights(snapshot);
   const selected = cards.find(c => c.id === selectedId) || cards.find(c => reportedDays(c, snapshot.month).length) || cards[0];
   const attention = snapshot.cards.filter(c => ['stale', 'setup', 'unconnected'].includes(c.status)).length;
   const metric = (label, value, note) => `<div class="desk-metric" title="${esc(note)}"><span>${esc(label)}</span><strong title="${esc(value)}">${esc(value)}</strong><small>${esc(note)}</small></div>`;

@@ -1,4 +1,4 @@
-import { providerGroups, sourceLabel } from './provider-groups.mjs';
+import { providerGroups, sourceLabel, cardsForView } from './provider-groups.mjs';
 import { desktopView } from './desktop-view.mjs';
 import { miniReading, miniCredit } from './mini-view.mjs';
 import { providerFor, providerLogo } from './provider-branding.mjs';
@@ -29,7 +29,7 @@ export function instrumentLayout(width, height, count, panorama = false) {
 }
 export function wideView(snapshot,view,options = {}) {
   const month=new Date(snapshot.month+'-01T12:00:00Z').toLocaleDateString('en-US',{month:'short',year:'numeric',timeZone:'UTC'}),insights=monthlyInsights(snapshot);
-  const cards=snapshot.cards.filter(c=>view==='overview'||view==='insights'||c.kind===view);
+  const cards=cardsForView(snapshot, view);
   const context=`<div class="wide-context"><div class="wide-period"><button class="icon-button" data-action="previous" aria-label="Previous month">‹</button><input type="month" id="wide-month-control" value="${snapshot.month}" min="2020-01" max="${currentMonth()}" aria-label="Choose reporting month"><button class="icon-button" data-action="next" aria-label="Next month" ${snapshot.month===currentMonth()?'disabled':''}>›</button><span>UTC${snapshot.demo?' · SAMPLE DATA':''}</span></div><button class="wide-totals" data-view="insights" title="${insights.completeSources}/7 sources complete; known cost is before credits and tax. Usage value may overlap own-key traffic.">Known cost <strong>${usd(insights.total)}${insights.completeSources<7?' *':''}</strong><span>Usage value <strong>${usd(insights.estimatedValue)}</strong></span></button></div>`;
   if(view==='insights')return `<section class="wide-panel" aria-label="Wide insights">${context}<div class="wide-insights-scroll">${insightsPage(snapshot)}</div></section>`;
   if(options.desktop)return desktopView(snapshot,view,context,options.selectedId);

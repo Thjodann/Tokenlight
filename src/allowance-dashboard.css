@@ -21,6 +21,14 @@
 .desk-instruments[data-count="3"] { grid-template-columns: repeat(3,minmax(0,1fr)); }
 .desk-instruments[data-count="4"] { grid-template-columns: repeat(4,minmax(0,1fr)); }
 .desk-instruments[data-count="1"] { grid-template-columns: 1fr; }
+/* Six providers need two rows. A fifth column wraps the last one and flattens every ring. */
+.desk-instruments[data-count="6"] { grid-template-columns: repeat(3,minmax(0,1fr)); grid-template-rows: repeat(2,minmax(0,1fr)); }
+.allowance-workspace .desk-instruments[data-count="6"] .desk-provider:nth-child(3n) { border-right: 0; }
+.allowance-workspace .desk-instruments[data-count="6"] .desk-provider:nth-child(n+4) { border-bottom: 0; }
+.allowance-workspace .desk-instruments[data-count="6"] .allotment-stage { grid-template-columns: minmax(72px,.9fr) minmax(0,1.35fr); grid-template-rows: minmax(0,1fr); gap: 8px; }
+.allowance-workspace .desk-instruments[data-count="6"] .allotment-dial { width: min(100%,148px,100cqh); }
+.allowance-workspace .desk-instruments[data-count="6"] .allotment-dial figcaption>strong { font-size: clamp(16px,22cqh,28px); letter-spacing: -.6px; }
+.allowance-workspace .desk-instruments[data-count="6"] .desk-provider-rows { height: auto; }
 .allowance-workspace .desk-provider { display: flex; flex-direction: column; gap: 0; min-width: 0; min-height: 0; padding: 0 15px; border: 0; border-right: 1px solid var(--line); background: transparent; }
 .allowance-workspace .desk-provider:first-child { padding-left: 0; }
 .allowance-workspace .desk-provider:last-child { border-right: 0; padding-right: 0; }

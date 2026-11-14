@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage, safeStorage, nativeTheme, powerMonitor, autoUpdater } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage, safeStorage, nativeTheme, powerMonitor, autoUpdater, session } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const os = require('node:os');
@@ -23,7 +23,7 @@ app.on('before-quit', () => { for (const child of ownChildren) child.kill('SIGTE
 const safeError = e => e instanceof providers.ProviderError ? e.message : 'Something interrupted this reading. Try again.';
 
 class Service {
-  constructor() { this.demo = process.argv.includes('--demo') || process.env.TOKENLIGHT_DEMO === '1'; this.demoAt = Date.now(); this.demoSeed = randomUUID(); this.modeEpoch = 0; this.month = model.currentMonth(); this.followCurrent = true; this.cache = {}; this.errors = {}; this.credentialScopes = {}; this.credentialEpochs = {}; this.busy = new Set(); this.inflight = new Map(); this.claudeReconnects = new Map(); this.fileError = null; this.vault = {}; this.writeQueue = Promise.resolve(); }
+  constructor() { this.demo = process.argv.includes('--demo') || process.env.TOKENLIGHT_DEMO === '1'; this.demoAt = Date.now(); this.demoSeed = randomUUID(); this.modeEpoch = 0; this.month = model.currentMonth(); this.followCurrent = true; this.cache = {}; this.errors = {}; this.credentialScopes = {}; this.credentialEpochs = {}; this.busy = new Set(); this.inflight = new Map(); this.claudeReconnects = new Map(); this.fileError = null; this.vault = {}; this.devinFileLinks = { api: false, account: false }; this.writeQueue = Promise.resolve(); }
   async init() {
     this.dir = app.getPath('userData'); await fs.mkdir(this.dir, { recursive: true });
     const candidate = path.join(os.homedir(), 'secrets.env');
@@ -54,8 +54,9 @@ class Service {
       return { ...source, ...(showCache ? cached : {}), status: this.busy.has(key) ? 'refreshing' : error ? showCache ? 'stale' : 'setup' : showCache ? 'ready' : 'unconnected', error: error?.message || null, errorCode: error?.code, retryAt: error?.retryAt,
         monthlyTarget: this.settings.targets[source.id] || null };
     });
-    return { updates: updates?.snapshot() || null, month, demo: this.demo, cards, version: app.getVersion(), updatedAt: Date.now(), fileError: this.demo ? null : this.fileError, vaultError: this.demo ? null : this.vaultError,
-      claudeSignIn: this.demo ? null : this.claudeSignIn || null, appearance: { dark: nativeTheme.shouldUseDarkColors },
+    const devinLinks = this.demo ? { api: true, account: true } : { api: Boolean(this.vault.devin) || this.devinFileLinks.api === true, account: Boolean(this.vault.devinQuota) || this.devinFileLinks.account === true };
+    return { updates: updates?.snapshot() || null, month, demo: this.demo, cards, version: app.getVersion(), updatedAt: Date.now(), fileError: this.demo ? null : this.fileError, vaultError: this.demo ? null : this.vaultError, devinLinks,
+      claudeSignIn: this.demo ? null : this.claudeSignIn || null, devinQuotaSignIn: this.demo ? null : this.devinQuotaSignIn || null, appearance: { dark: nativeTheme.shouldUseDarkColors },
       settings: sample ? demoData.demoSettings(this.settings, sample) : { secretsPath: this.settings.secretsPath, refreshMinutes: this.settings.refreshMinutes, showRemainingAllowance: this.settings.showRemainingAllowance, colorMode: this.settings.colorMode, layoutMode: this.settings.layoutMode, accountProfiles: this.settings.accountProfiles || {}, targets: this.settings.targets, savedKeys: Object.keys(this.vault) } };
   }
   async setAccountProfile(id, value) {
@@ -148,8 +149,8 @@ class Service {
       if (!live()) return this.snapshot(month);
     }
     let credentials;
-    try { credentials = await providers.loadCredentials(this.settings.secretsPath, this.vault); if (!live()) return this.snapshot(month); this.fileError = null; }
-    catch (e) { if (!live()) return this.snapshot(month); this.fileError = safeError(e); credentials = { ...this.vault }; }
+    try { credentials = await providers.loadCredentials(this.settings.secretsPath, this.vault); if (!live()) return this.snapshot(month); this.fileError = null; this.devinFileLinks = { api: Boolean(credentials.devin), account: Boolean(credentials.devinQuota) }; }
+    catch (e) { if (!live()) return this.snapshot(month); this.fileError = safeError(e); credentials = { ...this.vault }; this.devinFileLinks = { api: Boolean(credentials.devin), account: Boolean(credentials.devinQuota) }; }
     const reconciliation = reconcileCredentials(this.cache, this.errors, this.credentialScopes, credentials);
     for (const changedId of reconciliation.changed) {
       this.credentialEpochs[changedId] = (this.credentialEpochs[changedId] || 0) + 1;
@@ -206,14 +207,14 @@ class Service {
   }
   async saveKey(id, key) {
     this.requireLive();
-    if (!['openai', 'anthropic', 'elevenlabs', 'ollama'].includes(id)) throw new Error('Unknown provider.');
+    if (!['openai', 'anthropic', 'elevenlabs', 'ollama', 'devin', 'devinQuota'].includes(id)) throw new Error('Unknown provider.');
     if (typeof key !== 'string' || key.length < 12 || key.length > 10000 || /\s/.test(key)) throw new Error('Enter a valid API key without spaces.');
     if (!await safeStorage.isAsyncEncryptionAvailable()) throw new Error('macOS secure storage is unavailable. Your key was not saved.');
     const next = { ...this.vault, [id]: key };
     const encrypted = await safeStorage.encryptStringAsync(JSON.stringify(next));
     await this.persist('credentials.json', { payload: encrypted.toString('base64') });
     this.vault = next; this.vaultError = null;
-    await this.refresh(id, true); return this.snapshot();
+    await this.refresh(id === 'devinQuota' ? 'devin' : id, true); return this.snapshot();
   }
 }
 
@@ -254,7 +255,7 @@ app.whenReady().then(async () => {
       const entry = dashboards.authorize(event, readOnly);
       const value = channel === 'get-snapshot' ? service.snapshot(entry.month) : await fn(entry, ...args);
       return { ok: true, value: value?.cards ? dashboards.snapshot(entry, value) : value };
-    } catch (e) { return { ok: false, error: e instanceof providers.ProviderError || ['save-key', 'set-target', 'set-account-profile', 'get-snapshot', 'demo'].includes(channel) ? e.message : 'The action could not finish. Please try again.' }; }
+    } catch (e) { return { ok: false, error: e instanceof providers.ProviderError || ['save-key', 'set-target', 'set-account-profile', 'get-snapshot', 'demo', 'sign-in-devin-quota'].includes(channel) ? e.message : 'The action could not finish. Please try again.' }; }
   });
   handle('get-snapshot', null, true);
   handle('check-updates', () => { updates.check(); return service.snapshot(); });
@@ -294,6 +295,11 @@ app.whenReady().then(async () => {
   const claudeLogin = createClaudeLogin({ spawn, ownChildren, environment: process.env, cwd: service.dir,
     onState: state => { service.claudeSignIn = state; service.emit(); },
     onSuccess: async () => { await service.inflight.get(`${service.month}:claude`); await service.refresh('claude', true, true); if (service.errors[`${service.month}:claude`]) throw new Error('Usage unavailable'); } });
+  handle('sign-in-devin-quota', async entry => {
+    if (service.demo) throw new providers.ProviderError('Leave sample data to sign in.', 'setup');
+    const { openDevinQuotaWindow } = await import('./devin-signin.mjs');
+    return openDevinQuotaWindow({ BrowserWindow, session, parent: entry.window, saveSession: token => service.saveKey('devinQuota', token), onState: state => { service.devinQuotaSignIn = state; service.emit(); } });
+  });
   handle('sign-in-claude', async (_entry) => {
     if (service.demo) return 'Leave sample data to sign in.';
     const paths = ['/opt/homebrew/bin/claude', path.join(os.homedir(), '.local/bin/claude')]; let binary;

@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { dashboardView, dashboardLayout } from '../src/dashboard-view.mjs';
 import { demoCards } from '../src/fixtures.mjs';
-const snapshot = () => ({ month: '2026-11', demo: true, settings: { accountProfiles: {}, targets: {} }, cards: demoCards('2026-11', Date.parse('2026-11-02T00:00:00Z')) });
+const snapshot = () => ({ month: '2026-11', demo: true, settings: { accountProfiles: {}, targets: {} }, cards: demoCards('2026-11', Date.now()) });
 test('original display views allow only local filters and preserve their source filter', () => {
-  for (const [view, count] of [['overview', 5], ['account', 3], ['api', 4], ['insights', 0]]) {
+  for (const [view, count] of [['overview', 6], ['account', 4], ['api', 5], ['insights', 0]]) {
     const html = dashboardView(snapshot(), view);
     assert.equal((html.match(/<article /g) || []).length, count);
     assert.doesNotMatch(html, /<(input|select|a|form)\b|data-action=/);
