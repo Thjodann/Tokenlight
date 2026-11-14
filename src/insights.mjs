@@ -81,8 +81,22 @@ function recordedActivity(cards) {
     if(!rows.length&&c.requestCount>0||rows.some(m=>!finite(m.calls))||rows.reduce((n,m)=>n+(finite(m.calls)?m.calls:0),0)!==c.requestCount)group.partial=true;
   }
   const models=[...tokens.values()].sort((a,b)=>b.tokens-a.tokens||a.model.localeCompare(b.model));
+  const attributed=new Set(tokenCards.filter(c=>(c.modelUsage||[]).some(m=>identifiedModel(m)&&((finite(m.tokens)&&m.tokens>0)||(finite(m.calls)&&m.calls>0)))).map(c=>c.id));
+  const unnamedSources=sources.filter(s=>s.tokens>0&&!attributed.has(s.id)).sort((a,b)=>b.tokens-a.tokens||a.id.localeCompare(b.id));
   const interactionActivity=[...units.values()].map(g=>({...g,models:[...g.models.values()],sourceLeaders:leaders(g.sources,'calls'),modelLeaders:leaders([...g.models.values()],'calls')})).filter(g=>g.sources.length||g.models.length).sort((a,b)=>a.unit.localeCompare(b.unit));
-  return {tokenActivity:{sources,models,sourceLeaders:leaders(sources,'tokens'),modelLeaders:leaders(models,'tokens'),incompleteAttribution,partial:tokenCards.some(c=>!finite(c.monthly)||c.partial),stale:sources.some(c=>c.stale)||models.some(m=>m.stale),reportedSources:sources.length,totalSources:tokenCards.length},interactionActivity,interactionGaps};
+  return {tokenActivity:{sources,models,unnamedSources,sourceLeaders:leaders(sources,'tokens'),modelLeaders:leaders(models,'tokens'),incompleteAttribution,partial:tokenCards.some(c=>!finite(c.monthly)||c.partial),stale:sources.some(c=>c.stale)||models.some(m=>m.stale),reportedSources:sources.length,totalSources:tokenCards.length},interactionActivity,interactionGaps};
+}
+/** Named activity stays in its own unit. A token total with no model name is listed once, as the source, and is never assigned to a model. */
+export function mileageRows(insights, limit) {
+  const unnamed=(insights.tokenActivity?.unnamedSources||[]).filter(s=>s.tokens>0).slice(0,1);
+  const named=limitedModelActivity(insights.favorites||[],Math.max(0,limit-unnamed.length));
+  return [
+    ...unnamed.map(s=>({title:s.title,detail:'Model names not reported',amount:s.tokens,unit:'tokens',unnamed:true,width:100})),
+    ...named.map(m=>{
+      const scale=Math.max(1,...(insights.favorites||[]).filter(other=>other.activityUnit===m.activityUnit).map(other=>other.calls));
+      return {title:m.model,detail:`${m.providers.join(' · ')} · ${m.activityUnit} · ${String(m.activityUnit).startsWith('local ')?'device only · partial':'reported scopes'}`,amount:m.calls,unit:m.activityUnit,unnamed:false,width:m.calls/scale*100};
+    })
+  ];
 }
 export function activityMetrics(i) {
   const t=i.tokenActivity;
