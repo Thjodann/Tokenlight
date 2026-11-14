@@ -6,7 +6,7 @@ import { monthlyInsights, sourceCost } from './insights.mjs';
 import { esc, usd } from './insight-view.mjs';
 import { activityLine, dashboardInsights } from './usage-visuals.mjs';
 import { brandMark } from './brand.mjs';
-import { providerGroups, sourceLabel } from './provider-groups.mjs';
+import { providerGroups, sourceLabel, cardsForView } from './provider-groups.mjs';
 
 import { providerPanel } from './provider-panel.mjs';
 import { providerLayout } from './provider-layout.mjs';
@@ -42,7 +42,7 @@ function dashboardPaid(card) {
 }
 export function dashboardView(snapshot, requested = 'overview', viewport = { width: 440, height: 680 }) {
   const view = Object.hasOwn(dashboardNames, requested) ? requested : 'overview';
-  const cards = snapshot.cards.filter(c => view === 'overview' || view === 'insights' || c.kind === view);
+  const cards = cardsForView(snapshot, view);
   const i = monthlyInsights(snapshot), month = new Date(snapshot.month + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
   const nav = Object.entries(dashboardNames).map(([id, name]) => `<button type="button" data-dashboard-view="${id}" aria-label="${name}" aria-pressed="${id === view}" title="${name}"><svg viewBox="0 0 24 24" aria-hidden="true">${icons[id]}</svg><span>${name}</span></button>`).join('');
   if (view === 'providers') {

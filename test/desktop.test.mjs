@@ -15,8 +15,8 @@ test('desktop and wide layouts expose an exhausted paid cap with or without a se
     }
   }
 });
-test('desktop instruments preserve seven sources, filters and source details without stretched tiles', () => {
-  for(const [view,count] of [['overview',7],['account',3],['api',4]]) {
+test('desktop instruments preserve eight sources, filters and source details without stretched tiles', () => {
+  for(const [view,count] of [['overview',8],['account',4],['api',5]]) {
     const html = wideView(snapshot,view,{desktop:true});
     assert.equal((html.match(/class="desk-source-row"/g)||[]).length,count);
     assert.doesNotMatch(html,/class="wide-instrument"/);

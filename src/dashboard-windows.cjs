@@ -1,8 +1,8 @@
 const VIEWS = ['overview', 'account', 'api', 'insights', 'providers'];
 
 // Window identity, display state and IPC authority live in the main process.
-const PROVIDERS = Object.freeze({ openai: 'OpenAI', anthropic: 'Anthropic', cursor: 'Cursor', elevenlabs: 'ElevenLabs', ollama: 'Ollama' });
-const SOURCE_PROVIDER = Object.freeze({ codex: 'openai', openai: 'openai', claude: 'anthropic', anthropic: 'anthropic', cursor: 'cursor', elevenlabs: 'elevenlabs', ollama: 'ollama' });
+const PROVIDERS = Object.freeze({ openai: 'OpenAI', anthropic: 'Anthropic', cursor: 'Cursor', elevenlabs: 'ElevenLabs', ollama: 'Ollama', devin: 'Devin' });
+const SOURCE_PROVIDER = Object.freeze({ codex: 'openai', openai: 'openai', claude: 'anthropic', anthropic: 'anthropic', cursor: 'cursor', elevenlabs: 'elevenlabs', ollama: 'ollama', devin: 'devin' });
 const validProvider = id => typeof id === 'string' && Object.hasOwn(PROVIDERS, id);
 class DashboardWindows {
   constructor() { this.entries = new Map(); }
@@ -34,7 +34,7 @@ class DashboardWindows {
   snapshot(entry, snapshot) {
     const presentation = { dashboard: entry.dashboard, kiosk: entry.kiosk, view: entry.view, ...(entry.dashboard ? { provider: entry.provider, providers: PROVIDERS } : {}) };
     if (entry.dashboard && entry.view === 'providers') {
-      const fields = ['id', 'title', 'kind', 'status', 'monthly', 'unit', 'daily', 'windows', 'creditBalances', 'paidUsage', 'apiCost', 'modelUsage', 'requestCount', 'partial', 'lastUpdatedAt', 'coverage', 'sourceLabel', 'allowanceNote', 'creditNote', 'costNote', 'activityNote', 'historyNote', 'activityScope', 'breakdown'];
+      const fields = ['id', 'title', 'kind', 'status', 'monthly', 'unit', 'daily', 'windows', 'creditBalances', 'paidUsage', 'apiCost', 'modelUsage', 'requestCount', 'partial', 'lastUpdatedAt', 'coverage', 'sourceLabel', 'allowanceNote', 'creditNote', 'costNote', 'activityNote', 'historyNote', 'activityScope', 'breakdown', 'chartZone', 'plan'];
       const cards = snapshot.cards.filter(c => Object.hasOwn(SOURCE_PROVIDER, c.id) && SOURCE_PROVIDER[c.id] === entry.provider).map(c => Object.fromEntries(fields.filter(k => Object.hasOwn(c, k)).map(k => [k, c[k]])));
       return { version: snapshot.version, month: snapshot.month, demo: snapshot.demo, appearance: snapshot.appearance, cards,
         settings: { showRemainingAllowance: snapshot.settings.showRemainingAllowance, accountProfiles: Object.fromEntries(cards.map(c => [c.id, snapshot.settings.accountProfiles?.[c.id] || {}])) },
@@ -42,7 +42,7 @@ class DashboardWindows {
     }
     if (!entry.dashboard) return { ...snapshot, presentation };
     const { secretsPath, savedKeys, ...settings } = snapshot.settings;
-    return { ...snapshot, settings, fileError: null, vaultError: null, claudeSignIn: null, presentation };
+    return { ...snapshot, settings, fileError: null, vaultError: null, claudeSignIn: null, devinQuotaSignIn: null, presentation };
   }
   broadcast(snapshot) {
     for (const entry of this.entries.values()) if (!entry.window.isDestroyed()) entry.window.webContents.send('snapshot', this.snapshot(entry, snapshot(entry.month)));

@@ -21,7 +21,7 @@ test('Ollama reads only the usage and balance endpoints with a bearer key', asyn
  globalThis.fetch=async(url,options)=>{requests.push([String(url),options]);return new Response(JSON.stringify(String(url).includes('/balance')?balance:usage));};
  try{const r=await readProvider('ollama','2026-10',{credentials:{ollama:'fixture-key'}});assert.equal(r.monthly,120);assert.equal(requests.length,2);assert.ok(requests.every(([url,o])=>url.startsWith('https://ollama.com/api/')&&o.headers.Authorization==='Bearer fixture-key'&&!o.method));}finally{globalThis.fetch=original;}
 });
-test('all seven demo sources have finite metrics',()=>{const cards=demoCards('2026-10');assert.equal(cards.length,7);assert.ok(cards.every(c=>Number.isFinite(c.monthly)));});
+test('all eight demo sources have finite metrics',()=>{const cards=demoCards('2026-10');assert.equal(cards.length,8);assert.ok(cards.every(c=>Number.isFinite(c.monthly)));});
 
 test('Ollama cached readings are isolated when its key rotates', async()=>{
  const {default:policy}=await import('../src/credential-cache.cjs');const cache={'2026-10:ollama':{scope:policy.fingerprint('old-key'),monthly:10}};const scopes={};policy.reconcileCredentials(cache,{},scopes,{ollama:'new-key'});assert.equal(cache['2026-10:ollama'],undefined);assert.equal(policy.cacheAllowed('ollama',{scope:policy.fingerprint('old-key')},scopes),false);

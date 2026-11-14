@@ -95,7 +95,7 @@ test('Claude log activity deduplicates streaming messages without reading unrela
 });
 test('wide dashboard retains all seven sources, separate Cursor pools and cost navigation',()=>{
  const s={...snapshot(demoCards(month)),demo:true};const html=wideView(s,'overview');
- assert.equal((html.match(/class="wide-instrument"/g)||[]).length,7);assert.match(html,/Third-party models/);assert.match(html,/Grok \/ Composer/);assert.match(html,/SAMPLE DATA/);assert.match(html,/data-view="insights"/);
+ assert.equal((html.match(/class="wide-instrument"/g)||[]).length,8);assert.match(html,/Third-party models/);assert.match(html,/Grok \/ Composer/);assert.match(html,/SAMPLE DATA/);assert.match(html,/data-view="insights"/);
  let size=[1280,300];const c=new layout.LayoutController({getSize:()=>size,setSize:(w,h)=>{size=[w,h];}});c.apply('mini');c.apply('dashboard');assert.deepEqual(size,[1280,300]);
 });
 test('finance and leaderboard markup escape untrusted model labels and label averaged prices',()=>{

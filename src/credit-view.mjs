@@ -32,9 +32,12 @@ export function creditSection(card, details = false) {
   }
   const cost = card.apiCost;
   if (cost && typeof cost.total === 'number') {
-    const fable = cost.models.filter(r => /^claude-fable(?:-|$)/i.test(r.model)).reduce((n, r) => n + r.amount, 0);
-    rows.push(`<div class="credit-line"><span>API cost before credits</span><strong>${esc(creditAmount(cost.total, cost.unit))}</strong></div>${card.id === 'anthropic' ? `<div class="credit-line"><span>Fable API cost</span><strong>${esc(creditAmount(fable, cost.unit))}</strong></div>` : ''}<p class="credit-context">${esc(cost.month)} · reported cost, before credits</p>`);
-    if (details) for (const row of cost.models) rows.push(`<div class="credit-line"><span>${esc(row.model)}</span><strong>${esc(creditAmount(row.amount, cost.unit))}</strong></div>`);
+    const models = Array.isArray(cost.models) ? cost.models : [];
+    const fable = models.filter(r => /^claude-fable(?:-|$)/i.test(r.model)).reduce((n, r) => n + r.amount, 0);
+    const costLabel = card.id === 'devin' && cost.basis ? cost.basis : 'API cost before credits';
+    const costContext = card.id === 'devin' && cost.basis ? `${esc(cost.month)} · separate from ACU` : `${esc(cost.month)} · reported cost, before credits`;
+    rows.push(`<div class="credit-line"><span>${esc(costLabel)}</span><strong>${esc(creditAmount(cost.total, cost.unit))}</strong></div>${card.id === 'anthropic' ? `<div class="credit-line"><span>Fable API cost</span><strong>${esc(creditAmount(fable, cost.unit))}</strong></div>` : ''}<p class="credit-context">${costContext}</p>`);
+    if (details) for (const row of models) rows.push(`<div class="credit-line"><span>${esc(row.model)}</span><strong>${esc(creditAmount(row.amount, cost.unit))}</strong></div>`);
   }
   return rows.length ? `<section class="credit-readings" aria-label="Credits and paid usage">${rows.join('')}</section>` : '';
 }

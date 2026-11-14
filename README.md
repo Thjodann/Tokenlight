@@ -3,7 +3,7 @@
 <img width="2172" height="724" alt="image" src="https://github.com/user-attachments/assets/34851b27-8ebf-41ce-933f-3bc73132867b" />
 <img width="1728" alt="Tokenlight Dashboard" src="https://github.com/user-attachments/assets/b21a7691-1377-497c-ab7c-86d2731d8064" />
 
-### A personal macOS app for viewing OpenAI/Codex, Anthropic/Claude Code, Cursor, ElevenLabs and Ollama Cloud usage. Source and scaffold are retained until human acceptance.
+### A personal macOS app for viewing OpenAI/Codex, Anthropic/Claude Code, Cursor, ElevenLabs, Ollama Cloud and Devin usage. Source and scaffold are retained until human acceptance.
 
 ## Rebuild
 
@@ -28,7 +28,7 @@ npm start
 
 On macOS, the Tokenlight menu bar icon offers **Open Dashboard** and **Quit Tokenlight**. Closing the last window keeps monitoring running; Open Dashboard restores the main window or creates it again. Separate Dashboard windows remain independent. Use Quit Tokenlight or Command-Q to exit the app completely.
 
-The native app defaults to ~/secrets.env when it exists. Choose another file in Connections, or save individual keys with macOS secure storage. No secret values are copied from a secrets file into the app’s configuration or build. Supported names: OPENAI_ADMIN_KEY (or OPENAI_ADMIN_API_KEY or OPEN_AI_ADMIN_KEY), ANTHROPIC_ADMIN_KEY (or ANTHROPIC_ADMIN_API_KEY), ELEVENLABS_API_KEY. Ordinary API keys are detected as fallback credentials but may lack usage permissions.
+The native app defaults to ~/secrets.env when it exists. Choose another file in Connections, or save individual keys with macOS secure storage. No secret values are copied from a secrets file into the app’s configuration or build. Supported names: OPENAI_ADMIN_KEY (or OPENAI_ADMIN_API_KEY or OPEN_AI_ADMIN_KEY), ANTHROPIC_ADMIN_KEY (or ANTHROPIC_ADMIN_API_KEY), ELEVENLABS_API_KEY, OLLAMA_CLOUD_API_KEY, DEVIN_API_KEY. Ordinary API keys are detected as fallback credentials but may lack usage permissions. DEVIN_ORG_ID is optional and stays in the secrets file. Quota rings can use a Devin website sign-in from the Devin details button. That login is saved beside the Devin key and sent only to Devin’s usage page. DEVIN_QUOTA_SESSION remains available in the secrets file for the same login.
 
 Codex uses its account RPC read methods. Cursor reads the local desktop session in memory and retrieves account-wide dashboard usage; this personal interface is not the public team API. Claude Code requires a real subscription login; Connect reads its local session. Where available, Claude tokens come from local Code logs and exclude other devices and remote sessions. Account allowance windows are reported separately. No adapter creates model requests or changes billing settings.
 
@@ -77,11 +77,18 @@ Paid Claude usage and its monthly cap use the provider's explicit currency preci
 
 The Anthropic API card reads model costs through the Analytics cost endpoint and distinguishes Fable from other models in details. API costs are after discounts and before credits, not net card charges. If cost access fails, token reporting continues with an explicit cost warning. OpenAI API, Anthropic API and Cursor connections do not currently expose prepaid balances through these adapters; no balance is inferred from a spending cap or token count.
 
+
+## Devin
+
+Devin is one source with two faces. Set DEVIN_API_KEY in your secrets file, or save a key in Connections. The key must start with cog_ (a personal access token or service key). An older key that starts with apk_ cannot read usage. One key reads one organization. An Enterprise key uses official daily Agent Compute Unit history. A personal, Pro, Max or Teams key that is refused that history uses each session’s own ACU, counted once on the Pacific day the session started. Teams on-demand dollars stay separate from the ACU total.
+
+Daily and weekly quota remaining come from Devin’s usage page when that page accepts the official key. If the key is refused or that page is missing, choose Sign in for quota rings in the Devin details. Tokenlight opens Devin, keeps that website login on this Mac, and sends it only to Devin. A failed quota read leaves the allowance blank and keeps the ACU number. Accounts shows Devin after that sign-in. API usage shows Devin after the key is saved. Overview keeps both readings on the one card. If the key can see several organizations, set DEVIN_ORG_ID in the secrets file instead of combining them.
+
 ## Provider identity and Mini dashboard (0.4.0)
 
-OpenAI/Codex share teal, Anthropic/Claude share terracotta, Cursor is violet, ElevenLabs blue and Ollama gold. Original provider marks are bundled for offline use; see [mark provenance](docs/provider-marks.md). The colors continue through cards, connections, detail sheets and mini rows in both appearances.
+OpenAI/Codex share teal, Anthropic/Claude share terracotta, Cursor is violet, ElevenLabs blue, Ollama gold and Devin indigo. Original provider marks are bundled for offline use; see [mark provenance](docs/provider-marks.md). The colors continue through cards, connections, detail sheets and mini rows in both appearances.
 
-Resize the window to choose the layout automatically. Desktop windows use an aligned provider ledger with monthly totals, current allowance bars and credits, plus a daily source chart and model mileage. Shorter or narrower windows pack readings into tiles or compact rows. Below 360 pixels wide, at short heights, or in small windows, Mini uses a compact list with the same Overview, Accounts, API usage and Insights filters. The manual Mini/Full button is removed. View → Mini dashboard (⌘⇧M) remains an optional window-size preset. At the 260×180 minimum all seven rows fit; source detail sheets can scroll.
+Resize the window to choose the layout automatically. Desktop windows use an aligned provider ledger with monthly totals, current allowance bars and credits, plus a daily source chart and model mileage. Shorter or narrower windows pack readings into tiles or compact rows. Below 360 pixels wide, at short heights, or in small windows, Mini uses a compact list with the same Overview, Accounts, API usage and Insights filters. The manual Mini/Full button is removed. View → Mini dashboard (⌘⇧M) remains an optional window-size preset. At the 260×180 minimum all eight rows fit; source detail sheets can scroll.
 
 <img width="841" alt="thin Tokenlight" src="https://github.com/user-attachments/assets/166cb09b-a4a4-4163-938f-e97587640690" />
 
@@ -93,5 +100,5 @@ The **Insights** tab shows known monthly costs separately from reported or estim
 
 Panoramic windows use a horizontal instrument rail when there is room. Other window shapes use an adaptive grid or compact rows before any source is clipped. Extra summary metrics appear only when space allows; the full breakdown remains in Insights. Inspect [spending definitions and pricing provenance](docs/spending-and-insights.md) for scope, exclusions, estimates and known data limits.
 
-0.5.2 replaces stretched desktop tiles with a shared console, retaining adaptive tiles/rows at smaller sizes and all seven Mini rows. The approved Signal T logo and app icon ship together. See [desktop behavior](docs/desktop-dashboard.md).
+0.5.2 replaces stretched desktop tiles with a shared console, retaining adaptive tiles/rows at smaller sizes and all eight Mini rows. The approved Signal T logo and app icon ship together. See [desktop behavior](docs/desktop-dashboard.md).
 Snapshot export stays available in the toolbar at every size.

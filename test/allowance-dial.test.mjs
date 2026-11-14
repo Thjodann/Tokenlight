@@ -24,7 +24,7 @@ test('each active provider pool keeps its own number, label and reset without mu
   cards[1].windows.push({label:'Expired',percent:88,resetsAt:new Date(Date.now()-1000).toISOString()});
   const before=structuredClone(cards), pools=allowancePools(cards);
   assert.deepEqual(cards,before);
-  assert.equal(pools.length,8);
+  assert.equal(pools.length,10);
   assert.equal(pools.filter(p=>p.card.id==='claude').length,3);
   assert.ok(!pools.some(p=>p.label==='Expired'));
   const claude=pools.filter(p=>p.card.id==='claude');
@@ -53,8 +53,8 @@ test('missing allowances stay unknown and no token budget is inferred from activ
 test('provider instruments preserve separate account and API activity below current allowances', () => {
   const snapshot={month:'2026-11',settings:{},cards:demoCards('2026-11'),demo:true};
   const before=structuredClone(snapshot), html=desktopView(snapshot,'overview','');
-  assert.equal((html.match(/class="desk-provider"/g)||[]).length,5);
-  assert.equal((html.match(/data-action="details"/g)||[]).length,7);
+  assert.equal((html.match(/class="desk-provider"/g)||[]).length,6);
+  assert.equal((html.match(/data-action="details"/g)||[]).length,8);
   assert.match(html,/aria-label="Allowances · current"/);
   assert.match(html,/Activity · Nov/);
   assert.match(html,/Balances · current/);

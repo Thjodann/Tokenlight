@@ -5,6 +5,7 @@ import { loadClaudeSession, readClaudeUsage } from './claude-session.mjs';
 import { cursorStoragePassword } from './cursor-storage.mjs';
 import { activityRow, aggregateActivity } from './activity.mjs';
 import { openaiCosts } from './openai-cost.mjs';
+import { readDevin } from './devin.mjs';
 import { normalizeOllama } from './ollama.mjs';
 import { anthropicCosts } from './anthropic-cost.mjs';
 import { spawn, execFile } from 'node:child_process';
@@ -26,7 +27,9 @@ export const KEY_NAMES = {
   ollama: ['OLLAMA_CLOUD_API_KEY', 'OLLAMA_API_KEY'],
   openai: ['OPENAI_ADMIN_KEY', 'OPENAI_ADMIN_API_KEY', 'OPEN_AI_ADMIN_KEY', 'OPENAI_API_KEY'],
   anthropic: ['ANTHROPIC_ADMIN_KEY', 'ANTHROPIC_ADMIN_API_KEY', 'ANTHROPIC_API_KEY'],
-  elevenlabs: ['ELEVENLABS_API_KEY', 'ELEVEN_LABS_API_KEY', 'ELEVEN_API_KEY', 'ELEVENLABS_KEY']
+  elevenlabs: ['ELEVENLABS_API_KEY', 'ELEVEN_LABS_API_KEY', 'ELEVEN_API_KEY', 'ELEVENLABS_KEY'],
+  devin: ['DEVIN_API_KEY'],
+  devinQuota: ['DEVIN_QUOTA_SESSION']
 };
 export async function loadCredentials(path, vault = {}) {
   let values = {};
@@ -36,6 +39,7 @@ export async function loadCredentials(path, vault = {}) {
   }
   const result = {};
   for (const [id, names] of Object.entries(KEY_NAMES)) result[id] = vault[id] || names.map(n => values[n] || process.env[n]).find(Boolean) || null;
+  result.devinOrg = values.DEVIN_ORG_ID || process.env.DEVIN_ORG_ID || null;
   return result;
 }
 export async function fetchJSON(url, headers = {}, body) {
@@ -48,7 +52,7 @@ export async function fetchJSON(url, headers = {}, body) {
       const retryAt = Number.isFinite(seconds) && seconds > 0 ? Date.now() + seconds * 1000 : Number.isFinite(Date.parse(h)) ? Date.parse(h) : Date.now() + 300000;
       throw new ProviderError('The provider asked us to wait before refreshing. Your last reading is kept.', 'rate_limit', retryAt);
     }
-    if ([401, 403].includes(res.status)) throw new ProviderError('This connection needs sign-in or permission to read usage.', 'auth');
+    if ([401, 403].includes(res.status)) { const error = new ProviderError('This connection needs sign-in or permission to read usage.', 'auth'); error.status = res.status; throw error; }
     throw new ProviderError(`The provider couldn’t return usage (HTTP ${res.status}). Try again later.`, 'provider');
   }
   const declared = Number(res.headers.get('content-length'));
@@ -263,6 +267,7 @@ export async function readProvider(id, month, ctx) {
   if (id === 'cursor') return cursor(month, ctx);
   if (id === 'claude') return claude(month, ctx);
   if (id === 'elevenlabs') return elevenlabs(month, ctx);
+  if (id === 'devin') return readDevin(month, ctx);
   if (['openai', 'anthropic'].includes(id)) return apiUsage(id, month, ctx);
   throw new ProviderError('Unknown usage source.', 'setup');
 }

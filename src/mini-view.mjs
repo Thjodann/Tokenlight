@@ -1,4 +1,4 @@
-import { providerGroups, sourceLabel } from './provider-groups.mjs';
+import { providerGroups, sourceLabel, cardsForView } from './provider-groups.mjs';
 import { insightsPage } from './insight-view.mjs';
 import { sourceCost } from './insights.mjs';
 import { usd } from './insight-view.mjs';
@@ -10,7 +10,7 @@ export const miniReading = activityReading;
 export const miniCredit = balanceReading;
 export function miniView(snapshot, view = 'overview') {
   if (view === 'insights') return `<section class="mini-panel mini-insights" aria-label="Mini insights">${insightsPage(snapshot)}</section>`;
-  const cards = snapshot.cards.filter(c => view === 'overview' || c.kind === view);
+  const cards = cardsForView(snapshot, view);
   const month = new Date(snapshot.month + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
   const renderRow = c => {
     const credit = miniCredit(c), reading = miniReading(c), allowances = allowanceSummary(c, snapshot.settings?.showRemainingAllowance), cost = sourceCost(c, snapshot.settings, snapshot.month);

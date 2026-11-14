@@ -138,7 +138,7 @@ test('main bootstrap keeps kiosk IPC read-only and display windows alive after m
   timer(); assert.equal(provider.sent.at(-1)[1].presentation.provider, 'cursor');
   assert.deepEqual(Array.from(provider.sent.at(-1)[1].cards, c => c.id), ['cursor']);
   const otherTab = (await call(provider, 'set-window-view', 'account')).value;
-  assert.equal(otherTab.cards.length, 7, 'full dashboard data restored');
+  assert.equal(otherTab.cards.length, 8, 'full dashboard data restored');
   assert.equal(otherTab.presentation.provider, 'cursor'); assert.equal(otherTab.settings.secretsPath, undefined);
   const returned = (await call(provider, 'set-window-view', 'providers')).value;
   assert.deepEqual(Array.from(returned.cards, c => c.id), ['cursor']);
