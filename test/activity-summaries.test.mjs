@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as insights from '../src/insights.mjs';
-const {monthlyInsights}=insights;
+const {monthlyInsights, mileageRows}=insights;
 const activityMetrics=(...args)=>insights.activityMetrics(...args);
 import {insightsPage} from '../src/insight-view.mjs';
 import {desktopView} from '../src/desktop-view.mjs';
@@ -64,6 +64,13 @@ test('interaction ties and zero retain units, while model counts survive absent 
 test('token and interaction leaders can differ without allocating an unattributed remainder',()=>{
  const s=snapshot([card('openai',1000,2,[model('token-model',800,1),model('frequent-model',200,1)]),card('cursor',50,9,[model('frequent-model',50,9)])]);
  const i=monthlyInsights(s);assert.equal(i.tokenActivity.sourceLeaders[0].id,'openai');assert.equal(i.tokenActivity.modelLeaders[0].model,'token-model');assert.equal(i.tokenActivity.modelLeaders[0].tokens,800);assert.equal(i.interactionActivity.find(g=>g.unit==='events').modelLeaders[0].model,'frequent-model');
+});
+test('a token total without model names stays visible and is not assigned to a model',()=>{
+ const i=monthlyInsights(snapshot([card('codex',3e10,null,[],{title:'Codex'}),card('claude',200,4,[model('claude-opus',200,4)],{title:'Claude'})]));
+ assert.equal(i.tokenActivity.unnamedSources[0].id,'codex');assert.equal(i.tokenActivity.modelLeaders[0].model,'claude-opus');
+ const rows=mileageRows(i,3);assert.equal(rows[0].title,'Codex');assert.equal(rows[0].unnamed,true);assert.equal(rows[0].detail,'Model names not reported');assert.equal(rows[1].title,'claude-opus');
+ const html=desktopView(snapshot([card('codex',3e10,null,[],{title:'Codex'}),card('claude',200,4,[model('claude-opus',200,4)],{title:'Claude'})]),'overview','',null);
+ assert.match(html,/Codex/);assert.match(html,/Model names not reported/);assert.doesNotMatch(html,/gpt-/);
 });
 test('compact values keep coverage visible and bound long tie labels without dropping tied evidence',()=>{
  const i=monthlyInsights(invented());assert.match(activityMetrics(i)[1].value,/partial attribution/);assert.match(activityMetrics(i)[2].value,/partial/);
