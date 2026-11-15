@@ -7,8 +7,29 @@ const { spawn } = require('node:child_process');
 const { MODES, normalizeColorMode, backgroundColor, applyColorMode } = require('./appearance.cjs');
 const { LAYOUTS, MINIMUM, normalizeLayout, initialSize, LayoutController } = require('./layout.cjs');
 const { cacheAllowed, reconcileCredentials } = require('./credential-cache.cjs');
-const { DashboardWindows, validProvider } = require('./dashboard-windows.cjs');
+const { DashboardWindows, VIEWS, DASHBOARD_COLOR_MODES, validProvider } = require('./dashboard-windows.cjs');
 const dashboards = new DashboardWindows();
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+const normalizeInterfaceColors = value => {
+  if (value == null) return null;
+  if (!value || typeof value !== 'object' || !HEX_COLOR.test(value.surface) || !HEX_COLOR.test(value.accent)) throw new Error('Choose two valid interface colors.');
+  return { surface: value.surface.toLowerCase(), accent: value.accent.toLowerCase() };
+};
+const normalizeDashboardWindows = value => Array.isArray(value) ? value.slice(0, 12).flatMap(record => {
+  if (!record || typeof record !== 'object' || !validProvider(record.provider)) return [];
+  let interfaceColors = null;
+  try { interfaceColors = normalizeInterfaceColors(record.interfaceColors); } catch {}
+  return [{ id: typeof record.id === 'string' && record.id.length <= 100 ? record.id : randomUUID(), provider: record.provider,
+    view: VIEWS.includes(record.view) ? record.view : 'overview', month: /^20\d\d-(0[1-9]|1[0-2])$/.test(record.month) ? record.month : null,
+    followCurrent: record.followCurrent !== false, colorMode: DASHBOARD_COLOR_MODES.includes(record.colorMode) ? record.colorMode : 'inherit', interfaceColors, open: record.open !== false,
+    width: Number.isFinite(record.width) ? Math.min(4000, Math.max(MINIMUM.width, Math.round(record.width))) : null,
+    height: Number.isFinite(record.height) ? Math.min(3000, Math.max(MINIMUM.height, Math.round(record.height))) : null }];
+}) : [];
+const darkForMode = mode => mode === 'dark' ? true : mode === 'light' ? false : nativeTheme.shouldUseDarkColors;
+const darkForEntry = entry => darkForMode(entry?.dashboard ? entry.colorMode : 'inherit');
+const updateWindowBackgrounds = () => {
+  for (const entry of dashboards.entries.values()) if (!entry.window.isDestroyed()) entry.window.setBackgroundColor(entry.interfaceColors?.surface || service?.settings?.interfaceColors?.surface || backgroundColor(darkForEntry(entry)));
+};
 const { createClaudeLogin } = require('./claude-login.cjs');
 const { mainDashboardOpener, createStatusBar } = require('./status-bar.cjs');
 const { Updates, updateMenuItems, RELEASES } = require('./updater.cjs');
@@ -16,10 +37,10 @@ const { Updates, updateMenuItems, RELEASES } = require('./updater.cjs');
 if (process.env.TOKENLIGHT_PROFILE && path.isAbsolute(process.env.TOKENLIGHT_PROFILE)) app.setPath('userData', process.env.TOKENLIGHT_PROFILE);
 const single = app.requestSingleInstanceLock();
 if (!single) app.quit();
-let window, model, providers, service, layoutController, insights, demoData, statusBar, updates;
+let window, model, providers, service, layoutController, insights, demoData, statusBar, updates, quitting = false;
 const ownChildren = new Set();
 app.on('second-instance', () => { if (window && !window.isDestroyed()) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } else if (service) app.emit('activate'); });
-app.on('before-quit', () => { for (const child of ownChildren) child.kill('SIGTERM'); });
+app.on('before-quit', () => { quitting = true; for (const child of ownChildren) child.kill('SIGTERM'); });
 const safeError = e => e instanceof providers.ProviderError ? e.message : 'Something interrupted this reading. Try again.';
 
 class Service {
@@ -33,6 +54,8 @@ class Service {
     this.settings.showRemainingAllowance = this.settings.showRemainingAllowance === true;
     this.settings.automaticUpdates = this.settings.automaticUpdates !== false;
     this.settings.colorMode = normalizeColorMode(this.settings.colorMode);
+    try { this.settings.interfaceColors = normalizeInterfaceColors(this.settings.interfaceColors); } catch { this.settings.interfaceColors = null; }
+    this.settings.dashboardWindows = normalizeDashboardWindows(this.settings.dashboardWindows);
     this.settings.layoutMode = normalizeLayout(this.settings.layoutMode);
     this.cache = await this.read('usage-cache.json', {});
     const encrypted = await this.read('credentials.json', null);
@@ -57,7 +80,7 @@ class Service {
     const devinLinks = this.demo ? { api: true, account: true } : { api: Boolean(this.vault.devin) || this.devinFileLinks.api === true, account: Boolean(this.vault.devinQuota) || this.devinFileLinks.account === true };
     return { updates: updates?.snapshot() || null, month, demo: this.demo, cards, version: app.getVersion(), updatedAt: Date.now(), fileError: this.demo ? null : this.fileError, vaultError: this.demo ? null : this.vaultError, devinLinks,
       claudeSignIn: this.demo ? null : this.claudeSignIn || null, devinQuotaSignIn: this.demo ? null : this.devinQuotaSignIn || null, appearance: { dark: nativeTheme.shouldUseDarkColors },
-      settings: sample ? demoData.demoSettings(this.settings, sample) : { secretsPath: this.settings.secretsPath, refreshMinutes: this.settings.refreshMinutes, showRemainingAllowance: this.settings.showRemainingAllowance, colorMode: this.settings.colorMode, layoutMode: this.settings.layoutMode, accountProfiles: this.settings.accountProfiles || {}, targets: this.settings.targets, savedKeys: Object.keys(this.vault) } };
+      settings: sample ? demoData.demoSettings(this.settings, sample) : { secretsPath: this.settings.secretsPath, refreshMinutes: this.settings.refreshMinutes, showRemainingAllowance: this.settings.showRemainingAllowance, colorMode: this.settings.colorMode, interfaceColors: this.settings.interfaceColors || null, layoutMode: this.settings.layoutMode, accountProfiles: this.settings.accountProfiles || {}, targets: this.settings.targets, savedKeys: Object.keys(this.vault) } };
   }
   async setAccountProfile(id, value) {
     this.requireLive();
@@ -130,13 +153,27 @@ class Service {
     this.settings.colorMode = mode;
     await this.persist('settings.json', this.settings);
     applyColorMode(mode, nativeTheme);
-    for (const e of dashboards.entries.values()) e.window.setBackgroundColor(backgroundColor(nativeTheme.shouldUseDarkColors));
+    updateWindowBackgrounds();
     for (const value of MODES) {
       const item = Menu.getApplicationMenu()?.getMenuItemById(`appearance-${value}`);
       if (item) item.checked = value === mode;
     }
     this.emit();
     return this.snapshot();
+  }
+  async setInterfaceColors(value) {
+    const next = normalizeInterfaceColors(value);
+    this.interfaceColorWrites = (this.interfaceColorWrites || Promise.resolve()).catch(() => {}).then(async () => {
+      const previous = this.settings.interfaceColors || null;
+      this.settings.interfaceColors = next;
+      updateWindowBackgrounds();
+      this.emit();
+      try { await this.persist('settings.json', this.settings); }
+      catch (error) { this.settings.interfaceColors = previous; updateWindowBackgrounds(); this.emit(); throw error; }
+      this.emit();
+      return this.snapshot();
+    });
+    return this.interfaceColorWrites;
   }
   emit() { dashboards.broadcast(month => this.snapshot(month)); }
   async refresh(id = null, manual = false, allowKeychain = false, month = this.month, afterInflight = false) {
@@ -227,6 +264,15 @@ app.whenReady().then(async () => {
   app.on('before-quit', () => updates.stop());
   autoUpdater.on('before-quit-for-update', () => { for (const child of ownChildren) child.kill('SIGTERM'); });
   applyColorMode(service.settings.colorMode, nativeTheme);
+  let restoringDashboards = false;
+  let closedDashboardRecords = service.settings.dashboardWindows.filter(record => record.open === false);
+  const persistDashboardWindows = async () => {
+    const openRecords = dashboards.records().map(record => ({ ...record, open: true }));
+    const openIds = new Set(openRecords.map(record => record.id));
+    const closedRecords = closedDashboardRecords.filter(record => !openIds.has(record.id)).map(record => ({ ...record, open: false }));
+    service.settings.dashboardWindows = [...openRecords, ...closedRecords].slice(0, 12);
+    await service.persist('settings.json', service.settings);
+  };
   const focused = () => dashboards.entries.get(BrowserWindow.getFocusedWindow()?.webContents);
   const updateMenu = () => {
     const entry = focused(), menu = Menu.getApplicationMenu();
@@ -234,20 +280,39 @@ app.whenReady().then(async () => {
       const item = menu?.getMenuItemById(id); if (item) item.enabled = !!entry && !entry.dashboard;
     }
   };
-  const createWindow = async (source = null, selectedProvider = null) => {
+  const createWindow = async (source = null, selectedProvider = null, restored = null) => {
     const kiosk = !!source;
-    const [width, height] = source ? source.window.getSize() : initialSize(process.env.TOKENLIGHT_WINDOW_SIZE, service.settings.layoutMode);
-    const browser = new BrowserWindow({ title: kiosk ? 'Tokenlight — Dashboard' : 'Tokenlight', width, height, minWidth: MINIMUM.width, minHeight: MINIMUM.height, show: false, backgroundColor: backgroundColor(nativeTheme.shouldUseDarkColors), titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 10 },
+    let reopenedRecord = null;
+    if (kiosk && !restored && closedDashboardRecords.length) {
+      reopenedRecord = closedDashboardRecords.shift();
+      restored = reopenedRecord;
+    }
+    const inheritedSize = source?.window && !source.window.isDestroyed() ? source.window.getSize() : initialSize(process.env.TOKENLIGHT_WINDOW_SIZE, service.settings.layoutMode);
+    const width = restored?.width || inheritedSize[0], height = restored?.height || inheritedSize[1];
+    const restoredColors = restored?.interfaceColors || null, restoredMode = restored?.colorMode || (source?.dashboard ? source.colorMode : 'inherit');
+    const browser = new BrowserWindow({ title: kiosk ? 'Tokenlight — Dashboard' : 'Tokenlight', width, height, minWidth: MINIMUM.width, minHeight: MINIMUM.height, show: false, backgroundColor: restoredColors?.surface || service.settings.interfaceColors?.surface || backgroundColor(darkForMode(restoredMode)), titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 10 },
       webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false, backgroundThrottling: false } });
-    const entry = dashboards.add(browser, { kiosk, provider: selectedProvider || source?.provider || 'openai', view: selectedProvider ? 'providers' : source?.view, month: source?.month || service.month, followCurrent: source ? source.followCurrent : service.followCurrent });
+    const entry = dashboards.add(browser, { kiosk, id: kiosk ? restored?.id || randomUUID() : null, provider: selectedProvider || restored?.provider || source?.provider || 'openai', view: selectedProvider ? 'providers' : restored?.view || source?.view, month: restored?.month || source?.month || service.month, followCurrent: restored ? restored.followCurrent : source ? source.followCurrent : service.followCurrent, colorMode: restoredMode, colors: restoredColors });
     if (!kiosk) { window = browser; layoutController = new LayoutController(browser, service.settings.layoutMode); }
     browser.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     browser.webContents.on('will-navigate', event => event.preventDefault());
     browser.webContents.session.setPermissionRequestHandler((_wc, _permission, cb) => cb(false));
     browser.on('focus', () => { updateMenu(); void service.recheckClaude().catch(() => {}); });
-    browser.once('closed', () => { if (!kiosk) { window = null; layoutController = null; } updateMenu(); });
+    let closedRecord = null;
+    browser.on('close', () => { if (kiosk && !quitting) closedRecord = dashboards.record(entry); });
+    browser.once('closed', () => {
+      if (!kiosk) { window = null; layoutController = null; }
+      else if (!quitting) {
+        const savedRecord = service.settings.dashboardWindows.find(record => record.id === entry.id);
+        const retainedRecord = closedRecord || savedRecord;
+        if (retainedRecord) closedDashboardRecords = [{ ...retainedRecord, open: false }, ...closedDashboardRecords.filter(record => record.id !== retainedRecord.id)].slice(0, 12);
+        void persistDashboardWindows().catch(() => {});
+      }
+      updateMenu();
+    });
     try { await browser.loadFile(path.join(__dirname, 'index.html')); if (!browser.isDestroyed()) browser.show(); }
-    catch (error) { if (!browser.isDestroyed()) browser.close(); throw error; }
+    catch (error) { if (reopenedRecord) closedDashboardRecords.unshift(reopenedRecord); if (!browser.isDestroyed()) browser.close(); throw error; }
+    if (kiosk && !restoringDashboards) await persistDashboardWindows();
     return entry;
   };
   const handle = (channel, fn, readOnly = false) => ipcMain.handle(channel, async (event, ...args) => {
@@ -255,19 +320,20 @@ app.whenReady().then(async () => {
       const entry = dashboards.authorize(event, readOnly);
       const value = channel === 'get-snapshot' ? service.snapshot(entry.month) : await fn(entry, ...args);
       return { ok: true, value: value?.cards ? dashboards.snapshot(entry, value) : value };
-    } catch (e) { return { ok: false, error: e instanceof providers.ProviderError || ['save-key', 'set-target', 'set-account-profile', 'get-snapshot', 'demo', 'sign-in-devin-quota'].includes(channel) ? e.message : 'The action could not finish. Please try again.' }; }
+    } catch (e) { return { ok: false, error: e instanceof providers.ProviderError || ['save-key', 'set-target', 'set-account-profile', 'set-interface-colors', 'set-dashboard-interface-colors', 'get-snapshot', 'demo', 'sign-in-devin-quota'].includes(channel) ? e.message : 'The action could not finish. Please try again.' }; }
   });
   handle('get-snapshot', null, true);
   handle('check-updates', () => { updates.check(); return service.snapshot(); });
   handle('set-auto-updates', (_entry, enabled) => service.setAutomaticUpdates(enabled));
   handle('open-release-notes', () => shell.openExternal(RELEASES));
-  handle('set-window-view', (entry, view) => { dashboards.setView(entry, view); return service.snapshot(entry.month); }, true);
-  handle('set-dashboard-provider', (entry, id) => { dashboards.setProvider(entry, id); return service.snapshot(entry.month); }, true);
+  handle('set-window-view', async (entry, view) => { dashboards.setView(entry, view); if (entry.dashboard) await persistDashboardWindows(); return service.snapshot(entry.month); }, true);
+  handle('set-dashboard-provider', async (entry, id) => { dashboards.setProvider(entry, id); await persistDashboardWindows(); return service.snapshot(entry.month); }, true);
   handle('show-provider-dashboard', async (source, id) => {
     if (!validProvider(id)) throw new Error('Choose an available provider.');
     // Keep an existing display's reporting month when opening the provider tab.
     const entry = [...dashboards.entries.values()].find(e => e.dashboard && !e.window.isDestroyed()) || await createWindow(source, id);
     dashboards.setProvider(entry, id); dashboards.setView(entry, 'providers');
+    await persistDashboardWindows();
     entry.window.webContents.send('snapshot', dashboards.snapshot(entry, service.snapshot(entry.month)));
     if (entry.window.isMinimized()) entry.window.restore();
     entry.window.show(); entry.window.focus();
@@ -275,10 +341,23 @@ app.whenReady().then(async () => {
   });
   handle('new-dashboard-window', async entry => { await createWindow(entry); return null; });
   handle('set-appearance', (_entry, mode) => service.setColorMode(mode));
+  handle('set-interface-colors', (_entry, colors) => service.setInterfaceColors(colors));
+  handle('set-dashboard-appearance', async (entry, mode) => {
+    dashboards.setColorMode(entry, mode);
+    entry.window.setBackgroundColor(entry.interfaceColors?.surface || service.settings.interfaceColors?.surface || backgroundColor(darkForEntry(entry)));
+    await persistDashboardWindows();
+    return service.snapshot(entry.month);
+  }, true);
+  handle('set-dashboard-interface-colors', async (entry, colors) => {
+    dashboards.setInterfaceColors(entry, normalizeInterfaceColors(colors));
+    entry.window.setBackgroundColor(entry.interfaceColors?.surface || service.settings.interfaceColors?.surface || backgroundColor(darkForEntry(entry)));
+    await persistDashboardWindows();
+    return service.snapshot(entry.month);
+  }, true);
   handle('set-remaining-allowance', (_entry, enabled) => service.setShowRemainingAllowance(enabled));
   handle('set-layout', (_entry, mode) => service.setLayoutMode(mode));
   handle('set-account-profile', (_entry, id, value) => service.setAccountProfile(id, value));
-  nativeTheme.on('updated', () => { for (const e of dashboards.entries.values()) e.window.setBackgroundColor(backgroundColor(nativeTheme.shouldUseDarkColors)); service.emit(); });
+  nativeTheme.on('updated', () => { updateWindowBackgrounds(); service.emit(); });
   handle('refresh', (_entry, id) => service.refresh(id, true));
   handle('set-month', async (_entry, month) => { model.monthRange(month); if (month > model.currentMonth() || month < '2020-01') throw new providers.ProviderError(`Choose a month from January 2020 through ${new Date(model.currentMonth() + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}.`, 'validation'); service.month = month; service.followCurrent = month === model.currentMonth(); _entry.month = month; _entry.followCurrent = service.followCurrent; service.emit(); service.refresh(); return service.snapshot(); });
   handle('save-key', (_entry, id, key) => service.saveKey(id, key));
@@ -333,6 +412,14 @@ app.whenReady().then(async () => {
   const openDashboard = mainDashboardOpener({ getWindow: () => window, createWindow: () => createWindow() });
   installMenu();
   await openDashboard();
+  const mainEntry = [...dashboards.entries.values()].find(entry => !entry.dashboard);
+  const savedDashboards = service.settings.dashboardWindows.filter(record => record.open !== false);
+  if (mainEntry && savedDashboards.length) {
+    restoringDashboards = true;
+    for (const record of savedDashboards) { try { await createWindow(mainEntry, null, record); } catch {} }
+    restoringDashboards = false;
+    await persistDashboardWindows();
+  }
   statusBar = createStatusBar({ app, Tray, Menu, nativeImage, openDashboard, updateItems: () => updateMenuItems(updates, showUpdates, restartUpdate) });
   updates.on('change', () => { installMenu(); updateMenu(); statusBar?.updateMenu(); service.emit(); });
   updates.start();

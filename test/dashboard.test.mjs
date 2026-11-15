@@ -7,7 +7,13 @@ test('original display views allow only local filters and preserve their source 
   for (const [view, count] of [['overview', 6], ['account', 4], ['api', 5], ['insights', 0]]) {
     const html = dashboardView(snapshot(), view);
     assert.equal((html.match(/<article /g) || []).length, count);
-    assert.doesNotMatch(html, /<(input|select|a|form)\b|data-action=/);
+    const inputs = html.match(/<input\b[^>]*>/g) || [];
+    assert.equal(inputs.length, 2);
+    for (const input of inputs) {
+      assert.match(input, /type="color"/);
+      assert.match(input, /data-dashboard-color="(?:surface|accent)"/);
+    }
+    assert.doesNotMatch(html, /<(select|a|form)\b|data-action=/);
     assert.equal((html.match(/data-dashboard-view=/g) || []).length, 5);
     assert.match(html, new RegExp(`data-dashboard-view="${view}"[^>]*aria-pressed="true"`));
     assert.match(html, /SAMPLE DATA/); assert.match(html, /Nov 2026/);

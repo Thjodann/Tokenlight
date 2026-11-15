@@ -13,6 +13,8 @@
   <link rel="stylesheet" href="updates.css">
   <link rel="stylesheet" href="fable-clarity.css">
   <link rel="stylesheet" href="activity-summaries.css">
+  <link rel="stylesheet" href="overview-polish.css">
+  <link rel="stylesheet" href="surface-polish.css">
 </head>
 <body>
   <div class="titlebar"><span class="window-label">TOKENLIGHT <span id="version">0.2</span></span><span id="sync-status" class="sync-status">Starting up</span></div>
@@ -28,7 +30,11 @@
     <div class="toolbar-actions">
       <button id="update-ready" class="button update-indicator" aria-label="Update ready" title="Update ready" hidden>Update ready</button>
       <button class="button icon-action" data-action="new-dashboard" aria-label="New Dashboard Window" title="New Dashboard Window · ⌘⇧N"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H3v14h7m-3 4h14V7H7zm7-10v6m-3-3h6"/></svg></button>
-      <label class="appearance-control"><span>Appearance</span><select id="appearance-mode" aria-label="Color mode"><option value="auto">Auto</option><option value="dark">Dark</option><option value="light">Light</option></select></label>
+      <div class="appearance-control"><span>Appearance</span><div class="appearance-switch" role="group" aria-label="App appearance">
+        <button type="button" data-appearance-mode="auto" aria-pressed="false" aria-label="Auto appearance" title="Auto · follow system"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path class="appearance-auto-fill" d="M12 4a8 8 0 0 0 0 16Z"/></svg></button>
+        <button type="button" data-appearance-mode="light" aria-pressed="false" aria-label="Light appearance" title="Light"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M4.9 4.9 7 7m10 10 2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></svg></button>
+        <button type="button" data-appearance-mode="dark" aria-pressed="false" aria-label="Dark appearance" title="Dark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 15.3A8 8 0 0 1 8.7 5 8 8 0 1 0 19 15.3Z"/></svg></button>
+      </div></div>
       <button id="refresh-button" class="button icon-action" aria-label="Refresh usage" title="Refresh usage"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 7a7 7 0 0 1 11.6-2L20 8M4 16l2.3 3A7 7 0 0 0 18 17"/></svg></button>
       <button class="button icon-action" data-action="export" aria-label="Export snapshot" title="Export snapshot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-8 4-4 4 4M5 13v7h14v-7"/></svg></button>
       <button id="connections-button" class="button" aria-label="Connections" title="Connections"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v5m8-5v5M6 8h12v3a6 6 0 0 1-6 6v4m0-4a6 6 0 0 1-6-6V8"/></svg><span class="connection-button-label">Connections</span></button>
@@ -40,6 +46,19 @@
     <div class="dialog-header"><div><span class="eyebrow">DATA SOURCES</span><h2 id="connections-title">Connections</h2></div><button class="icon-button" data-close="connections-dialog" aria-label="Close connections">✕</button></div>
     <div class="dialog-content">
       <h3>Settings</h3>
+      <div class="appearance-setting">
+        <div class="appearance-mode-row"><div><strong>Appearance</strong><p>Main window default · new pop-outs follow it</p></div><div class="appearance-switch" role="group" aria-label="App appearance">
+          <button type="button" data-appearance-mode="auto" aria-pressed="false" aria-label="Auto appearance" title="Auto · follow system"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path class="appearance-auto-fill" d="M12 4a8 8 0 0 0 0 16Z"/></svg></button>
+          <button type="button" data-appearance-mode="light" aria-pressed="false" aria-label="Light appearance" title="Light"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M4.9 4.9 7 7m10 10 2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></svg></button>
+          <button type="button" data-appearance-mode="dark" aria-pressed="false" aria-label="Dark appearance" title="Dark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 15.3A8 8 0 0 1 8.7 5 8 8 0 1 0 19 15.3Z"/></svg></button>
+        </div></div>
+        <div class="interface-color-setting"><div><strong>Interface colors</strong><p>Surface · accent</p></div><div class="dual-color-control" role="group" aria-label="Interface colors">
+          <label class="color-stop color-stop-surface" title="Surface tint"><span class="sr-only">Surface tint</span><input id="surface-color" type="color" value="#edf1f3"></label>
+          <span class="color-rail" aria-hidden="true"></span>
+          <label class="color-stop color-stop-accent" title="Accent color"><span class="sr-only">Accent color</span><input id="accent-color" type="color" value="#237762"></label>
+          <button type="button" id="reset-interface-colors" class="color-reset" aria-label="Reset interface colors" title="Reset interface colors">↺</button>
+        </div></div>
+      </div>
       <label class="update-preference"><input id="remaining-allowance" type="checkbox"><span>Show remaining allowance</span></label>
       <div class="demo-option screenshot-demo"><div><strong>Demo mode</strong><p id="demo-description">Randomized data for screenshots. Live reads pause in every window. Stays on until you turn it off.</p></div><button class="button demo-switch" id="demo-button" role="switch" aria-checked="false" aria-label="Demo mode" aria-describedby="demo-description">Off</button></div>
       <button class="button button-quiet" id="demo-randomize" hidden>Randomize sample data</button>

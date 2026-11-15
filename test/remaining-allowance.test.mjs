@@ -85,18 +85,23 @@ test('renderer snapshot updates open source allowances without disturbing dirty 
  const updateSource=renderer.slice(renderer.indexOf('function update(value)'),renderer.indexOf('async function run'));
  const controls={ '#details-dialog':{open:true}, '#remaining-allowance':{}, '#appearance-mode':{} };
  const reading={dataset:{allowanceIndex:'0'},textContent:'60% used'}, unknown={dataset:{allowanceIndex:'1'},textContent:'Not reported'};
- const before={cards:[{id:'codex',windows:[{percent:60},{percent:null}]}],settings:{showRemainingAllowance:false},demo:false};
- let renders=0;
+ const before={cards:[{id:'codex',windows:[{percent:60},{percent:null}]}],settings:{showRemainingAllowance:false,colorMode:'auto',interfaceColors:{surface:'#101820',accent:'#00aa88'}},appearance:{dark:false},demo:false};
+ let renders=0,syncedColors,syncedDark,syncedMode;
  const module={exports:{}};
  vm.runInNewContext(updateSource+';module.exports=update;',{
   module,snapshot:before,view:'overview',selected:'codex',detailDirty:true,
   $:key=>controls[key],document:{documentElement:{dataset:{}},querySelectorAll:()=>[reading,unknown]},
-  allowanceReading,render:()=>renders++,renderDetails:()=>assert.fail('must preserve dirty form')
+  allowanceReading,render:()=>renders++,renderDetails:()=>assert.fail('must preserve dirty form'),
+  effectiveInterfaceColors:value=>value.settings.interfaceColors||null,
+  syncInterfaceColors:(colors,dark)=>{syncedColors=colors;syncedDark=dark;},
+  syncAppearanceControls:mode=>{syncedMode=mode;}
  });
- module.exports({...before,settings:{showRemainingAllowance:true}});
+ module.exports({...before,settings:{...before.settings,showRemainingAllowance:true},appearance:{dark:true}});
  assert.equal(reading.textContent,'40% remaining');assert.equal(unknown.textContent,'Not reported');
  assert.equal(controls['#remaining-allowance'].checked,true);assert.equal(renders,1);
+ assert.deepEqual(syncedColors,before.settings.interfaceColors);assert.equal(syncedDark,true);assert.equal(syncedMode,'auto');
  module.exports(before);assert.equal(reading.textContent,'60% used');assert.equal(controls['#remaining-allowance'].checked,false);
+ assert.equal(syncedDark,false);
 });
 
 test('run shows rejected API errors in the toast and preserves successful string receipts',async()=>{

@@ -74,7 +74,7 @@ test('main bootstrap keeps kiosk IPC read-only and display windows alive after m
   class Tray { constructor() { tray = this; } setToolTip() {} setContextMenu(value) { this.menu = value; } destroy() {} }
   const items = template => template.flatMap(i => [i, ...items(i.submenu || [])]);
   const electron = { app, autoUpdater: new EventEmitter(), Tray, nativeImage: { createEmpty: () => ({ addRepresentation() {}, setTemplateImage() {} }) }, BrowserWindow: Window, ipcMain: { handle: (key, fn) => handlers.set(key, fn) }, Menu: { buildFromTemplate: template => ({ template, getMenuItemById: id => items(template).find(i => i.id === id) }), setApplicationMenu: value => { menu = value; }, getApplicationMenu: () => menu }, nativeTheme: Object.assign(new EventEmitter(), { shouldUseDarkColors: true }), powerMonitor: new EventEmitter(), safeStorage: {}, dialog: {}, shell: {} };
-  const fakeFS = { mkdir: async () => {}, access: async () => { throw new Error('Absent'); }, readFile: async () => { throw new Error('Absent'); } };
+  const fakeFS = { mkdir: async () => {}, writeFile: async () => {}, rename: async () => {}, access: async () => { throw new Error('Absent'); }, readFile: async () => { throw new Error('Absent'); } };
   class ProviderError extends Error {}
   let source = await readFile(new URL('../src/main.cjs', import.meta.url), 'utf8');
   source = source.replace("Promise.all([import('./model.mjs'), import('./providers.mjs'), import('./insights.mjs'), import('./demo-data.mjs')])", 'Promise.resolve(__modules)');
@@ -100,11 +100,22 @@ test('main bootstrap keeps kiosk IPC read-only and display windows alive after m
   firstLink.close();
   assert.equal((await call(main, 'new-dashboard-window')).ok, true);
   const kiosk = windows.at(-1), display = (await call(kiosk, 'get-snapshot')).value;
-  assert.equal(display.presentation.view, 'api'); assert.equal(display.month, '2026-10'); assert.equal(display.presentation.dashboard, true);
+  assert.equal(display.presentation.view, 'providers'); assert.equal(display.presentation.provider, 'anthropic');
+  assert.equal(display.presentation.id, linkedSnapshot.presentation.id, 'a closed dashboard reopens with its saved identity');
+  assert.equal(display.month, '2026-10'); assert.equal(display.presentation.dashboard, true);
   for (const channel of ['set-remaining-allowance', 'set-appearance', 'set-layout', 'set-account-profile', 'refresh', 'set-month', 'save-key', 'set-target', 'choose-secrets', 'open-provider', 'connect', 'demo', 'sign-in-claude', 'export', 'new-dashboard-window', 'check-updates', 'set-auto-updates', 'restart-update', 'open-release-notes']) {
     assert.equal((await call(kiosk, channel)).ok, false, `${channel} must reject a kiosk caller before doing work`);
   }
   assert.equal((await call(main, 'set-remaining-allowance', 'true')).ok, false);
+  assert.equal((await call(main, 'set-dashboard-appearance', 'dark')).ok, false);
+  assert.equal((await call(main, 'set-dashboard-interface-colors', { surface: '#111827', accent: '#22c55e' })).ok, false);
+  const themed = await call(kiosk, 'set-dashboard-appearance', 'dark');
+  assert.equal(themed.ok, true); assert.equal(themed.value.presentation.colorMode, 'dark'); assert.equal(themed.value.appearance.dark, true);
+  const colored = await call(kiosk, 'set-dashboard-interface-colors', { surface: '#111827', accent: '#22c55e' });
+  assert.equal(colored.ok, true); assert.deepEqual(colored.value.presentation.interfaceColors, { surface: '#111827', accent: '#22c55e' });
+  assert.equal(colored.value.presentation.interfaceColorsCustom, true);
+  assert.equal((await call(kiosk, 'set-dashboard-appearance', 'invalid')).ok, false);
+  assert.equal((await call(kiosk, 'set-dashboard-interface-colors', { surface: 'nope', accent: '#22c55e' })).ok, false);
   assert.equal((await handlers.get('set-remaining-allowance')({ sender: main.webContents, senderFrame: {} }, true)).ok, false);
   const switched = await call(kiosk, 'set-window-view', 'account');
   assert.equal(switched.ok, true); assert.equal(switched.value.presentation.view, 'account');

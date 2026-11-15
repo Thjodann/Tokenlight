@@ -22,6 +22,46 @@ let snapshot, view = 'overview', selected = null, detailDirty = false, toastTime
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const monthName = value => new Date(value + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const fullCount = n => finite(n) ? n.toLocaleString('en-US', { maximumFractionDigits: 0 }) : 'Not available';
+function syncAppearanceControls(mode) {
+  for (const button of document.querySelectorAll('[data-appearance-mode]')) button.setAttribute('aria-pressed', String(button.dataset.appearanceMode === mode));
+}
+const interfaceDefaults = dark => dark ? { surface: '#101417', accent: '#8bd6be' } : { surface: '#edf1f3', accent: '#237762' };
+function applyInterfaceColors(colors, dark) {
+  const custom = colors && typeof colors.surface === 'string' && typeof colors.accent === 'string';
+  const value = custom ? colors : interfaceDefaults(dark);
+  const root = document.documentElement;
+  if (custom) {
+    root.dataset.interfaceColors = 'custom';
+    root.style.setProperty('--interface-surface', value.surface);
+    root.style.setProperty('--interface-accent', value.accent);
+  } else {
+    delete root.dataset.interfaceColors;
+    root.style.removeProperty('--interface-surface');
+    root.style.removeProperty('--interface-accent');
+  }
+  return value;
+}
+function syncInterfaceColors(colors, dark) {
+  const custom = colors && typeof colors.surface === 'string' && typeof colors.accent === 'string';
+  const value = applyInterfaceColors(colors, dark);
+  if (!$('#surface-color') || !$('#accent-color')) return;
+  $('#surface-color').value = value.surface;
+  $('#accent-color').value = value.accent;
+  const control = $('.dual-color-control');
+  control.style.setProperty('--picker-surface', value.surface);
+  control.style.setProperty('--picker-accent', value.accent);
+  $('#reset-interface-colors').disabled = !custom;
+}
+function selectedInterfaceColors() {
+  return { surface: $('#surface-color').value.toLowerCase(), accent: $('#accent-color').value.toLowerCase() };
+}
+function selectedDashboardInterfaceColors() {
+  const surface = $('[data-dashboard-color="surface"]'), accent = $('[data-dashboard-color="accent"]');
+  return surface && accent ? { surface: surface.value.toLowerCase(), accent: accent.value.toLowerCase() } : null;
+}
+function effectiveInterfaceColors(value = snapshot) {
+  return value?.presentation?.dashboard && value.presentation.interfaceColorsCustom ? value.presentation.interfaceColors : value?.settings?.interfaceColors || null;
+}
 function since(ms) { if (!ms) return 'Not connected'; const seconds = Math.max(0, (Date.now() - ms) / 1000); return seconds < 60 ? 'Just updated' : seconds < 3600 ? `${Math.floor(seconds / 60)} min ago` : seconds < 86400 ? `${Math.floor(seconds / 3600)} hr ago` : `${Math.floor(seconds / 86400)} days ago`; }
 function reset(ms, long = false) {
   if (!Number.isFinite(ms)) return 'Reset not reported';
@@ -83,7 +123,7 @@ function render() {
     for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
     $('#version').textContent = snapshot.version;
     document.title = `Tokenlight — ${view === 'account' ? 'Accounts' : view === 'api' ? 'API usage' : view === 'insights' ? 'Insights' : view === 'providers' ? 'Providers' : 'Overview'} · ${snapshot.month}`;
-    const active = document.activeElement, focusedView = active?.dataset?.dashboardView;
+    const active = document.activeElement, focusedView = active?.dataset?.dashboardView, focusedTheme = active?.dataset?.dashboardTheme;
     const focusedProvider = active?.id === 'provider-selector';
     const focusedControl = active?.dataset?.providerFocus;
     const key = snapshot.presentation?.provider;
@@ -94,6 +134,7 @@ function render() {
     if (focusedProvider) $('#provider-selector')?.focus({ preventScroll: true });
     if (focusedControl) [...document.querySelectorAll('[data-provider-focus]')].find(e => e.dataset.providerFocus === focusedControl)?.focus({ preventScroll: true });
     if (focusedView) document.querySelector(`[data-dashboard-view="${focusedView}"]`)?.focus({ preventScroll: true });
+    if (focusedTheme) document.querySelector(`[data-dashboard-theme="${focusedTheme}"]`)?.focus({ preventScroll: true });
     fitInstruments();
     return;
   }
@@ -117,6 +158,19 @@ function render() {
   const sections = view === 'insights' ? insightsPage(snapshot) : ['account', 'api'].filter(k => view === 'overview' || k === view).map(kind => `<section aria-label="${kind === 'account' ? 'AI accounts' : 'API usage'}"><div class="section-heading"><div class="section-label"><h2>${kind === 'account' ? 'AI accounts' : 'API usage'}</h2><span>${sectionList(kind).length}</span></div><p>${kind === 'account' ? 'Account activity & current allowances' : 'Calendar month · UTC'}</p></div><div class="cards" data-kind="${kind}">${sectionList(kind).map(card).join('')}</div></section>`).join('');
   const dashboard = `${snapshot.demo ? '<div class="demo-banner"><strong>Sample data</strong><span>These readings are examples. Live connections are paused.</span><button class="button" data-action="live">Use live data</button></div>' : ''}<div class="page-heading"><div><span class="eyebrow">MONTHLY ACTIVITY</span><h1>${names[view][1]}</h1><p class="page-description">${names[view][2]}</p></div><div class="period-picker" aria-label="Reporting month"><button class="icon-button" data-action="previous" aria-label="Previous month">‹</button><input type="month" id="month-control" value="${snapshot.month}" min="2020-01" max="${currentMonth()}" aria-label="Choose reporting month"><button class="icon-button" data-action="next" aria-label="Next month" ${snapshot.month === currentMonth() ? 'disabled' : ''}>›</button></div></div><div class="overview-stats"><div class="overview-stat"><span class="stat-symbol" aria-hidden="true">⌁</span><div><p class="stat-label">Connected sources</p><p class="stat-value">${connected}<span>of ${snapshot.cards.length} sources</span></p></div></div><div class="overview-stat"><span class="stat-symbol" aria-hidden="true">${needs ? '◌' : '✓'}</span><div><p class="stat-label">Needs attention</p><p class="stat-value">${busy && !connected ? 'Checking' : needs ? `${needs} source${needs === 1 ? '' : 's'}` : 'All connected'}</p></div></div><div class="overview-stat"><span class="stat-symbol" aria-hidden="true">◷</span><div><p class="stat-label">Next allowance reset</p><p class="stat-value">${next ? reset(next.resetsAt) : 'Not reported'}<span>${next ? new Date(next.resetsAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}</span></p></div></div></div>${snapshot.fileError ? `<div class="attention-banner"><span>${esc(snapshot.fileError)}</span><button data-action="connections">Choose file</button></div>` : ''}${sections}<footer class="page-footer"><p><span aria-hidden="true">◈</span>Data stays on your Mac. Each source keeps its own units and allowance window.</p><button data-action="export">Export snapshot ↗</button></footer>`;
   $('#main').innerHTML = `<div class="dashboard-content">${dashboard}</div><div class="wide-content">${wideView(snapshot,view,{desktop:desktopQuery.matches,selectedId:dashboardSource})}</div>${miniView(snapshot,view)}`;
+  const insightTable = document.querySelector('.wide-insights-scroll .insight-table');
+  if (insightTable && !insightTable.closest('.insight-source-details')) {
+    const details = document.createElement('details');
+    const summary = document.createElement('summary');
+    const label = document.createElement('span');
+    const count = document.createElement('small');
+    details.className = 'insight-source-details';
+    label.textContent = 'Source details';
+    count.textContent = `${insightTable.querySelectorAll('.insight-row').length} sources`;
+    summary.append(label, count);
+    insightTable.before(details);
+    details.append(summary, insightTable);
+  }
   fitInstruments();
   $('#analytics-source')?.addEventListener('change', e => { dashboardSource = e.target.value; render(); });
   for (const button of document.querySelectorAll('[data-view]')) { button.classList.toggle('active', button.dataset.view === view); button.setAttribute('aria-current', button.dataset.view === view ? 'page' : 'false'); }
@@ -210,8 +264,10 @@ function update(value) {
     }
   }
   $('#remaining-allowance').checked = value.settings.showRemainingAllowance === true;
-  document.documentElement.dataset.theme = value.appearance?.dark ? 'dark' : 'light';
-  $('#appearance-mode').value = value.settings.colorMode || 'auto';
+  const dark = value.appearance?.dark === true;
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  syncInterfaceColors(effectiveInterfaceColors(value), dark);
+  syncAppearanceControls(value.settings.colorMode || 'auto');
   render();
   if (signInChanged && (selected === 'claude' || selected === 'devin') && $('#details-dialog').open && !detailDirty) renderDetails();
 }
@@ -253,7 +309,35 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { e.preventDefault(); document.querySelector('[data-provider-back]')?.click(); }
 });
 document.addEventListener('change', e => { if (e.target.id === 'provider-selector' && snapshot?.presentation?.dashboard) void run(() => api.provider(e.target.value)); });
-document.addEventListener('click', e => { const displayNav = e.target.closest('[data-dashboard-view]'); if (displayNav && snapshot?.presentation?.dashboard) { void run(() => api.viewState(displayNav.dataset.dashboardView)); return; } if (snapshot?.presentation?.dashboard) return; const close = e.target.closest('[data-close]'); if (close) return $('#' + close.dataset.close).close(); const button = e.target.closest('[data-action]'); if (button) action(button.dataset.action, button.dataset.id); const nav = e.target.closest('[data-view]'); if (nav) { view = nav.dataset.view; void api.viewState(view).catch(() => {}); render(); } });
+document.addEventListener('input', e => {
+  if (!snapshot?.presentation?.dashboard || !e.target.matches('[data-dashboard-color]')) return;
+  const colors = selectedDashboardInterfaceColors();
+  if (!colors) return;
+  const control = e.target.closest('.monitor-color-popover')?.querySelector('.monitor-dual-color');
+  control?.style.setProperty('--picker-surface', colors.surface);
+  control?.style.setProperty('--picker-accent', colors.accent);
+  applyInterfaceColors(colors, document.documentElement.dataset.theme === 'dark');
+});
+document.addEventListener('click', e => {
+  const dashboardColorsApply = e.target.closest('[data-dashboard-colors-apply]');
+  if (dashboardColorsApply && snapshot?.presentation?.dashboard) {
+    const colors = selectedDashboardInterfaceColors();
+    if (colors) void run(() => api.dashboardInterfaceColors(colors));
+    return;
+  }
+  const dashboardColorsReset = e.target.closest('[data-dashboard-colors-reset]');
+  if (dashboardColorsReset && snapshot?.presentation?.dashboard) { void run(() => api.dashboardInterfaceColors(null)); return; }
+  const dashboardTheme = e.target.closest('[data-dashboard-theme]');
+  if (dashboardTheme && snapshot?.presentation?.dashboard) { void run(() => api.dashboardAppearance(dashboardTheme.dataset.dashboardTheme)); return; }
+  const appearanceMode = e.target.closest('[data-appearance-mode]');
+  if (appearanceMode && !snapshot?.presentation?.dashboard) { void run(() => api.appearance(appearanceMode.dataset.appearanceMode)); return; }
+  const displayNav = e.target.closest('[data-dashboard-view]');
+  if (displayNav && snapshot?.presentation?.dashboard) { void run(() => api.viewState(displayNav.dataset.dashboardView)); return; }
+  if (snapshot?.presentation?.dashboard) return;
+  const close = e.target.closest('[data-close]'); if (close) return $('#' + close.dataset.close).close();
+  const button = e.target.closest('[data-action]'); if (button) action(button.dataset.action, button.dataset.id);
+  const nav = e.target.closest('[data-view]'); if (nav) { view = nav.dataset.view; void api.viewState(view).catch(() => {}); render(); }
+});
 compactQuery.addEventListener('change', () => render());
 wideQuery.addEventListener('change', () => render());
 desktopQuery.addEventListener('change', () => render());
@@ -266,7 +350,17 @@ $('#release-notes').addEventListener('click', () => run(() => api.releaseNotes()
 $('#automatic-updates').addEventListener('change', async () => { const value = $('#automatic-updates').checked; await run(() => api.automaticUpdates(value)); renderUpdates(); });
 $('#connections-button').addEventListener('click', showConnections);
 $('#remaining-allowance').addEventListener('change', async () => { await run(() => api.remainingAllowance($('#remaining-allowance').checked)); $('#remaining-allowance').checked = snapshot.settings.showRemainingAllowance === true; });
-$('#appearance-mode').addEventListener('change', () => run(() => api.appearance($('#appearance-mode').value)));
+for (const input of [$('#surface-color'), $('#accent-color')]) {
+  input.addEventListener('input', () => syncInterfaceColors(selectedInterfaceColors(), document.documentElement.dataset.theme === 'dark'));
+  input.addEventListener('change', async () => {
+    const result = await run(() => api.interfaceColors(selectedInterfaceColors()));
+    if (!result) syncInterfaceColors(snapshot.settings.interfaceColors, document.documentElement.dataset.theme === 'dark');
+  });
+}
+$('#reset-interface-colors').addEventListener('click', async () => {
+  const result = await run(() => api.interfaceColors(null));
+  if (!result) syncInterfaceColors(snapshot.settings.interfaceColors, document.documentElement.dataset.theme === 'dark');
+});
 $('#refresh-button').addEventListener('click', () => run(() => api.refresh()));
 $('#choose-secrets').addEventListener('click', () => run(() => api.chooseSecrets()));
 $('#demo-button').addEventListener('click', async () => { const button = $('#demo-button'); button.disabled = true; await run(() => api.demo(!snapshot.demo)); button.disabled = false; renderConnections(); });

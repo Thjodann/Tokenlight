@@ -23,10 +23,10 @@ function devinInView(view, snapshot) {
   return false;
 }
 
-/** Accounts shows the signed-in quota. API usage shows the key’s ACU. Overview keeps both on the original card. */
+/** Accounts shows the signed-in quota with recorded ACU activity. API usage keeps API-only detail. Overview keeps both on the original card. */
 export function presentCard(card, view) {
   if (!card || card.id !== 'devin' || view === 'overview' || view === 'insights') return card;
-  if (view === 'account') return { ...card, title: 'Devin', monthly: null, daily: [], requestCount: null, modelUsage: [], apiCost: null, partial: false, breakdown: null };
+  if (view === 'account') return { ...card, title: 'Devin', daily: [], requestCount: null, modelUsage: [], apiCost: null, partial: false, breakdown: null };
   if (view === 'api') return { ...card, title: 'Devin API', windows: [], creditBalances: [], plan: null, allowanceNote: null };
   return card;
 }
