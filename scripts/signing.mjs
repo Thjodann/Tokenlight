@@ -81,9 +81,9 @@ export async function verifySignedApp(appPath, config, run = runTool) {
   run('/usr/bin/codesign', ['--verify', '--deep', '--strict', appPath], { timeout: 300000 });
   const evidence = [];
   for (const path of [appPath, ...await machOFiles(join(appPath, 'Contents'))]) {
-    run('/usr/bin/codesign', ['--verify', '--strict', path]);
-    const info = run('/usr/bin/codesign', ['--display', '--verbose=4', path]);
-    const entitlements = run('/usr/bin/codesign', ['--display', '--entitlements', ':-', path]);
+    run('/usr/bin/codesign', ['--verify', '--strict', path], { timeout: 300000 });
+    const info = run('/usr/bin/codesign', ['--display', '--verbose=4', path], { timeout: 300000 });
+    const entitlements = run('/usr/bin/codesign', ['--display', '--entitlements', ':-', path], { timeout: 300000 });
     evidence.push({ path: relative(appPath, path) || '.', ...verifySignature(info.stdout + info.stderr, entitlements.stdout, config.teamId) });
   }
   return evidence;
