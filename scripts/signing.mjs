@@ -76,7 +76,9 @@ async function machOFiles(directory) {
 }
 
 export async function verifySignedApp(appPath, config, run = runTool) {
-  run('/usr/bin/codesign', ['--verify', '--deep', '--strict', appPath]);
+  // Electron bundles contain enough nested code objects that a deep verification
+  // can exceed the generic tool timeout on external build volumes.
+  run('/usr/bin/codesign', ['--verify', '--deep', '--strict', appPath], { timeout: 300000 });
   const evidence = [];
   for (const path of [appPath, ...await machOFiles(join(appPath, 'Contents'))]) {
     run('/usr/bin/codesign', ['--verify', '--strict', path]);
