@@ -1,3 +1,4 @@
+import { interfaceDefaults, interfaceTokens } from './interface-colors.mjs';
 import { insightsPage, financeDetails, cardCosts } from './insight-view.mjs';
 import { mountProviderReader } from './provider-panel.mjs';
 import { dashboardView, dashboardLayout } from './dashboard-view.mjs';
@@ -25,7 +26,8 @@ const fullCount = n => finite(n) ? n.toLocaleString('en-US', { maximumFractionDi
 function syncAppearanceControls(mode) {
   for (const button of document.querySelectorAll('[data-appearance-mode]')) button.setAttribute('aria-pressed', String(button.dataset.appearanceMode === mode));
 }
-const interfaceDefaults = dark => dark ? { surface: '#101417', accent: '#8bd6be' } : { surface: '#edf1f3', accent: '#237762' };
+// A draft owns the preview until its own save is acknowledged. Undefined follows snapshots; null previews reset.
+let interfaceColorDraft, interfaceColorSave = 0;
 function applyInterfaceColors(colors, dark) {
   const custom = colors && typeof colors.surface === 'string' && typeof colors.accent === 'string';
   const value = custom ? colors : interfaceDefaults(dark);
@@ -34,23 +36,35 @@ function applyInterfaceColors(colors, dark) {
     root.dataset.interfaceColors = 'custom';
     root.style.setProperty('--interface-surface', value.surface);
     root.style.setProperty('--interface-accent', value.accent);
+    for (const [name, color] of Object.entries(interfaceTokens(value, dark))) root.style.setProperty(name === 'accent' ? '--interface-accent-token' : '--interface-' + name, color);
   } else {
     delete root.dataset.interfaceColors;
     root.style.removeProperty('--interface-surface');
     root.style.removeProperty('--interface-accent');
+    for (const name of ['bg', 'panel', 'raised', 'line', 'line-strong', 'track', 'accent-token']) root.style.removeProperty('--interface-' + name);
   }
   return value;
 }
 function syncInterfaceColors(colors, dark) {
   const custom = colors && typeof colors.surface === 'string' && typeof colors.accent === 'string';
   const value = applyInterfaceColors(colors, dark);
-  if (!$('#surface-color') || !$('#accent-color')) return;
-  $('#surface-color').value = value.surface;
-  $('#accent-color').value = value.accent;
-  const control = $('.dual-color-control');
-  control.style.setProperty('--picker-surface', value.surface);
-  control.style.setProperty('--picker-accent', value.accent);
+  for (const key of ['surface', 'accent']) {
+    const input = $('#' + key + '-color');
+    if (input) input.value = value[key];
+    const dashboardInput = document.querySelector(`[data-dashboard-color="${key}"]`);
+    if (dashboardInput) dashboardInput.value = value[key];
+    for (const control of document.querySelectorAll('.dual-color-control, .monitor-color-chip')) control.style.setProperty('--picker-' + key, value[key]);
+  }
   $('#reset-interface-colors').disabled = !custom;
+  const reset = document.querySelector('[data-dashboard-colors-reset]');
+  if (reset) {
+    const windowCustom = interfaceColorDraft !== undefined ? interfaceColorDraft.colors !== null : snapshot?.presentation?.interfaceColorsCustom;
+    reset.disabled = !windowCustom;
+    const summary = document.querySelector('.monitor-colors > summary');
+    const title = windowCustom ? 'Window colors — custom' : 'Window colors — using app colors';
+    summary?.setAttribute('aria-label', title);
+    summary?.setAttribute('title', title);
+  }
 }
 function selectedInterfaceColors() {
   return { surface: $('#surface-color').value.toLowerCase(), accent: $('#accent-color').value.toLowerCase() };
@@ -60,7 +74,23 @@ function selectedDashboardInterfaceColors() {
   return surface && accent ? { surface: surface.value.toLowerCase(), accent: accent.value.toLowerCase() } : null;
 }
 function effectiveInterfaceColors(value = snapshot) {
+  if (interfaceColorDraft !== undefined) return interfaceColorDraft.colors ?? (value?.presentation?.dashboard ? value?.settings?.interfaceColors : null) ?? null;
   return value?.presentation?.dashboard && value.presentation.interfaceColorsCustom ? value.presentation.interfaceColors : value?.settings?.interfaceColors || null;
+}
+async function saveInterfaceColors(colors, dashboard) {
+  const request = ++interfaceColorSave;
+  const draft = interfaceColorDraft = { colors };
+  syncInterfaceColors(effectiveInterfaceColors(), document.documentElement.dataset.theme === 'dark');
+  const result = await run(async () => {
+    const value = await (dashboard ? api.dashboardInterfaceColors(colors) : api.interfaceColors(colors));
+    if (request !== interfaceColorSave) return null;
+    if (interfaceColorDraft === draft && value?.cards) interfaceColorDraft = undefined;
+    return value;
+  });
+  if (!result && interfaceColorDraft === draft) interfaceColorDraft = undefined;
+  // An older save must never clear a newer local edit.
+  syncInterfaceColors(effectiveInterfaceColors(), document.documentElement.dataset.theme === 'dark');
+  render();
 }
 function since(ms) { if (!ms) return 'Not connected'; const seconds = Math.max(0, (Date.now() - ms) / 1000); return seconds < 60 ? 'Just updated' : seconds < 3600 ? `${Math.floor(seconds / 60)} min ago` : seconds < 86400 ? `${Math.floor(seconds / 3600)} hr ago` : `${Math.floor(seconds / 86400)} days ago`; }
 function reset(ms, long = false) {
@@ -125,12 +155,19 @@ function render() {
     document.title = `Tokenlight — ${view === 'account' ? 'Accounts' : view === 'api' ? 'API usage' : view === 'insights' ? 'Insights' : view === 'providers' ? 'Providers' : 'Overview'} · ${snapshot.month}`;
     const active = document.activeElement, focusedView = active?.dataset?.dashboardView, focusedTheme = active?.dataset?.dashboardTheme;
     const focusedProvider = active?.id === 'provider-selector';
+    const focusedColor = active?.dataset?.dashboardColor;
     const focusedControl = active?.dataset?.providerFocus;
     const key = snapshot.presentation?.provider;
     if (!providerDetails.has(key)) providerDetails.set(key, {});
     const providerState = providerDetails.get(key);
-    $('#main').innerHTML = dashboardView(snapshot, view, { width: window.innerWidth, height: window.innerHeight, providerState });
+    const colorsOpen = document.querySelector('.monitor-colors')?.open;
+    const colors = effectiveInterfaceColors();
+    const colorSnapshot = { ...snapshot, presentation: { ...snapshot.presentation, interfaceColors: colors, interfaceColorsCustom: interfaceColorDraft !== undefined ? interfaceColorDraft.colors !== null : snapshot.presentation.interfaceColorsCustom } };
+    $('#main').innerHTML = dashboardView(colorSnapshot, view, { width: window.innerWidth, height: window.innerHeight, providerState });
+    if (colorsOpen) document.querySelector('.monitor-colors').open = true;
+    syncInterfaceColors(colors, document.documentElement.dataset.theme === 'dark');
     providerReader = mountProviderReader(document.querySelector('.provider-reader'), providerState);
+    if (focusedColor) document.querySelector(`[data-dashboard-color="${focusedColor}"]`)?.focus({ preventScroll: true });
     if (focusedProvider) $('#provider-selector')?.focus({ preventScroll: true });
     if (focusedControl) [...document.querySelectorAll('[data-provider-focus]')].find(e => e.dataset.providerFocus === focusedControl)?.focus({ preventScroll: true });
     if (focusedView) document.querySelector(`[data-dashboard-view="${focusedView}"]`)?.focus({ preventScroll: true });
@@ -313,20 +350,18 @@ document.addEventListener('input', e => {
   if (!snapshot?.presentation?.dashboard || !e.target.matches('[data-dashboard-color]')) return;
   const colors = selectedDashboardInterfaceColors();
   if (!colors) return;
-  const control = e.target.closest('.monitor-color-popover')?.querySelector('.monitor-dual-color');
-  control?.style.setProperty('--picker-surface', colors.surface);
-  control?.style.setProperty('--picker-accent', colors.accent);
-  applyInterfaceColors(colors, document.documentElement.dataset.theme === 'dark');
+  interfaceColorDraft = { colors };
+  syncInterfaceColors(colors, document.documentElement.dataset.theme === 'dark');
 });
 document.addEventListener('click', e => {
   const dashboardColorsApply = e.target.closest('[data-dashboard-colors-apply]');
   if (dashboardColorsApply && snapshot?.presentation?.dashboard) {
     const colors = selectedDashboardInterfaceColors();
-    if (colors) void run(() => api.dashboardInterfaceColors(colors));
+    if (colors) void saveInterfaceColors(colors, true);
     return;
   }
   const dashboardColorsReset = e.target.closest('[data-dashboard-colors-reset]');
-  if (dashboardColorsReset && snapshot?.presentation?.dashboard) { void run(() => api.dashboardInterfaceColors(null)); return; }
+  if (dashboardColorsReset && snapshot?.presentation?.dashboard) { void saveInterfaceColors(null, true); return; }
   const dashboardTheme = e.target.closest('[data-dashboard-theme]');
   if (dashboardTheme && snapshot?.presentation?.dashboard) { void run(() => api.dashboardAppearance(dashboardTheme.dataset.dashboardTheme)); return; }
   const appearanceMode = e.target.closest('[data-appearance-mode]');
@@ -351,16 +386,10 @@ $('#automatic-updates').addEventListener('change', async () => { const value = $
 $('#connections-button').addEventListener('click', showConnections);
 $('#remaining-allowance').addEventListener('change', async () => { await run(() => api.remainingAllowance($('#remaining-allowance').checked)); $('#remaining-allowance').checked = snapshot.settings.showRemainingAllowance === true; });
 for (const input of [$('#surface-color'), $('#accent-color')]) {
-  input.addEventListener('input', () => syncInterfaceColors(selectedInterfaceColors(), document.documentElement.dataset.theme === 'dark'));
-  input.addEventListener('change', async () => {
-    const result = await run(() => api.interfaceColors(selectedInterfaceColors()));
-    if (!result) syncInterfaceColors(snapshot.settings.interfaceColors, document.documentElement.dataset.theme === 'dark');
-  });
+  input.addEventListener('input', () => { interfaceColorDraft = { colors: selectedInterfaceColors() }; syncInterfaceColors(interfaceColorDraft.colors, document.documentElement.dataset.theme === 'dark'); });
+  input.addEventListener('change', () => saveInterfaceColors(selectedInterfaceColors(), false));
 }
-$('#reset-interface-colors').addEventListener('click', async () => {
-  const result = await run(() => api.interfaceColors(null));
-  if (!result) syncInterfaceColors(snapshot.settings.interfaceColors, document.documentElement.dataset.theme === 'dark');
-});
+$('#reset-interface-colors').addEventListener('click', () => saveInterfaceColors(null, false));
 $('#refresh-button').addEventListener('click', () => run(() => api.refresh()));
 $('#choose-secrets').addEventListener('click', () => run(() => api.chooseSecrets()));
 $('#demo-button').addEventListener('click', async () => { const button = $('#demo-button'); button.disabled = true; await run(() => api.demo(!snapshot.demo)); button.disabled = false; renderConnections(); });

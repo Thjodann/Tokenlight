@@ -4,14 +4,14 @@
   --surface-shadow: 0 1px 2px light-dark(#20363a0b,#0003), 0 5px 16px light-dark(#354d5510,#0003);
 }
 :root[data-interface-colors="custom"] {
-  --bg: color-mix(in srgb,var(--interface-surface) 22%,light-dark(#edf1f3,#101417));
-  --panel: color-mix(in srgb,var(--interface-surface) 12%,light-dark(#fafcfd,#191f23));
-  --raised: color-mix(in srgb,var(--interface-surface) 10%,light-dark(#fff,#222a2f));
-  --line: color-mix(in srgb,var(--interface-surface) 18%,light-dark(#d8e0e4,#303c43));
-  --line-strong: color-mix(in srgb,var(--interface-surface) 18%,light-dark(#becbd2,#4c5e68));
-  --accent: color-mix(in srgb,var(--interface-accent) 82%,var(--ink));
+  --bg: var(--interface-bg);
+  --panel: var(--interface-panel);
+  --raised: var(--interface-raised);
+  --line: var(--interface-line);
+  --line-strong: var(--interface-line-strong);
+  --accent: var(--interface-accent-token);
   --accent-soft: color-mix(in srgb,var(--accent) 14%,var(--panel));
-  --track: color-mix(in srgb,var(--interface-surface) 16%,light-dark(#dfe7e9,#334047));
+  --track: var(--interface-track);
 }
 
 /* One selected-tab silhouette everywhere. Focus remains a separate accessible ring. */
@@ -601,11 +601,11 @@ body[data-wide=true] .appearance-switch svg { width: 12px; height: 12px; }
 
 /* Semantic allowance color is useful when one provider is the whole instrument. */
 body[data-dashboard=true] .monitor-page[data-view="providers"]
-  .provider-lane:has(.allotment-ring[data-allowance-state="warning"]) {
+  .provider-lane:has(> .provider-primary > .allotment-dial .allotment-ring[data-ring="0"][data-allowance-state="warning"]) {
   --allowance-attention: var(--warning);
 }
 body[data-dashboard=true] .monitor-page[data-view="providers"]
-  .provider-lane:has(.allotment-ring[data-allowance-state="critical"]) {
+  .provider-lane:has(> .provider-primary > .allotment-dial .allotment-ring[data-ring="0"][data-allowance-state="critical"]) {
   --allowance-attention: var(--danger);
 }
 body[data-dashboard=true] .monitor-page[data-view="providers"]
@@ -621,12 +621,12 @@ body[data-dashboard=true] .monitor-page[data-view="providers"]
   color: var(--allowance-severity);
 }
 body[data-dashboard=true] .monitor-page[data-view="providers"]
-  .provider-lane:has(.allotment-ring:is([data-allowance-state="warning"],[data-allowance-state="critical"]))
+  .provider-lane:has(> .provider-primary > .allotment-dial .allotment-ring[data-ring="0"]:is([data-allowance-state="warning"],[data-allowance-state="critical"]))
   .line-stroke {
   stroke: var(--allowance-attention);
 }
 body[data-dashboard=true] .monitor-page[data-view="providers"]
-  .provider-lane:has(.allotment-ring:is([data-allowance-state="warning"],[data-allowance-state="critical"]))
+  .provider-lane:has(> .provider-primary > .allotment-dial .allotment-ring[data-ring="0"]:is([data-allowance-state="warning"],[data-allowance-state="critical"]))
   .activity-line circle {
   fill: var(--allowance-attention);
 }
