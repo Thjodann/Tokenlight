@@ -77,3 +77,29 @@ test('empty, missing, malformed and truncated cost reports do not fabricate char
   await assert.rejects(anthropicCosts('2026-10', async () => ({ data: [], has_more: true }), {}));
   await assert.rejects(anthropicCosts('2026-10', async () => ({ data: [{ cost: { amount: 'unknown', currency: 'USD' } }] }), {}));
 });
+
+test('switched-off extra usage under the cap is not a reached paid cap, and included Fable stays separate', () => {
+  const money = amount_minor => ({ amount_minor, exponent: 2, currency: 'USD' });
+  const r = normalizeClaude({
+    five_hour: { utilization: 28, resets_at: '2099-11-22T04:30:00Z' },
+    seven_day: { utilization: 4, resets_at: '2099-11-25T23:00:00Z' },
+    limits: [
+      { kind: 'session', percent: 28 },
+      { kind: 'weekly_all', percent: 4 },
+      { kind: 'weekly_scoped', percent: 6, resets_at: '2099-11-25T23:00:00Z', scope: { model: { display_name: 'Fable' } } }
+    ],
+    weekly_scoped_shares: [{ limit_index: 2, used_percent_of_weekly: 3, allowance_percent_of_weekly: 50 }],
+    spend: { enabled: false, used: money(0), limit: money(2000) },
+    extra_usage: { is_enabled: false, spend_limit_reached: true, used_credits: 0, monthly_limit: 2000, currency: 'USD', decimal_places: 2 }
+  });
+  assert.equal(r.paidUsage.capReached, false);
+  assert.equal(r.paidUsage.enabled, false);
+  assert.equal(r.paidUsage.used, 0);
+  assert.equal(r.paidUsage.limit, 20);
+  assert.equal(r.fableWindow.percent, 6);
+  assert.equal(r.fableWindow.included, true);
+  assert.equal(r.fableWindow.allowancePercentOfWeekly, 50);
+  assert.match(r.creditNote, /included in the plan/);
+  assert.equal(normalizeClaude({ limits: [{ kind: 'weekly_scoped', percent: 9, scope: { model: { display_name: 'Opus' } } }] }).fableWindow, null);
+  assert.equal(normalizeClaude({ limits: [{ kind: 'weekly_scoped', percent: 6, scope: { model: { display_name: 'Fable 5' } } }] }).fableWindow.percent, 6);
+});

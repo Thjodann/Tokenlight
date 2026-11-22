@@ -54,7 +54,7 @@ export function paidLimitText(card) {
   const p = card.paidUsage;
   if (!p) return '';
   const amount = finite(p.used) && finite(p.limit) ? `${creditAmount(p.used, p.unit)} used of ${creditAmount(p.limit, p.unit)}` : 'Amount not reported';
-  return `Paid spending · current month: ${amount}${p.capReached === true ? ' · Cap reached · paid usage unavailable · separate from weekly allowance' : p.enabled === false ? ' · Disabled' : ''}`;
+  return `Paid spending · current month: ${amount}${p.capReached === true ? ' · Cap reached · paid usage unavailable · separate from weekly allowance' : p.enabled === false ? ' · Extra usage off' : ''}`;
 }
 export function allowanceSummary(card, remaining = false) {
   return [...activeAllowances(card).map(w => `${allowanceLabel(w, card)}: ${allowanceReading(w.percent, remaining)}`), paidLimitText(card)].filter(Boolean).join('; ') || 'Current allowances not reported';
@@ -62,7 +62,7 @@ export function allowanceSummary(card, remaining = false) {
 export function paidUsageMarkup(card) {
   const p = card.paidUsage;
   if (!p) return '';
-  return `<span class="metric-paid-limit${p.capReached === true ? ' is-reached' : ''}" title="${esc(paidLimitText(card))}" aria-label="${esc(paidLimitText(card))}"><span>Paid spending · month</span><strong>${finite(p.used) ? esc(creditAmount(p.used, p.unit)) : '—'} / ${finite(p.limit) ? esc(creditAmount(p.limit, p.unit)) : '—'}</strong>${p.capReached === true ? '<small>Cap reached · paid usage unavailable</small>' : p.enabled === false ? '<small>Paid usage disabled</small>' : '<small>Separate from weekly allowance</small>'}</span>`;
+  return `<span class="metric-paid-limit${p.capReached === true ? ' is-reached' : ''}" title="${esc(paidLimitText(card))}" aria-label="${esc(paidLimitText(card))}"><span>Paid spending · month</span><strong>${finite(p.used) ? esc(creditAmount(p.used, p.unit)) : '—'} / ${finite(p.limit) ? esc(creditAmount(p.limit, p.unit)) : '—'}</strong>${p.capReached === true ? '<small>Cap reached · paid usage unavailable</small>' : p.enabled === false ? '<small>Extra usage off</small>' : '<small>Separate from weekly allowance</small>'}</span>`;
 }
 export function allowanceMarkup(card, remaining = false) {
   const windows = activeAllowances(card);

@@ -53,7 +53,8 @@ function dashboardPaid(card) {
   const value = n => Number.isFinite(n) ? creditAmount(n, p.unit) : '—';
   const percent = Number.isFinite(p.used) && Number.isFinite(p.limit) && p.limit > 0 ? Math.min(100, Math.max(0, p.used / p.limit * 100)) : null;
   const label = paidLimitText(card) + (fableAccessText(card) ? '; ' + fableAccessText(card) : '');
-  return `<div class="monitor-spend${p.capReached ? ' is-reached' : ''}" title="${esc(label)}" aria-label="${esc(label)}"><span>Paid / mo</span><b>${esc(value(p.used))} / ${esc(value(p.limit))}</b>${p.capReached || p.enabled === false ? '<svg class="monitor-spend-lock" viewBox="0 0 16 16" role="img" aria-label="Paid usage unavailable"><rect x="3" y="7" width="10" height="7" rx="1"/><path d="M5 7V4a3 3 0 0 1 6 0v3"/></svg>' : ''}${percent == null ? '' : `<svg class="monitor-spend-track" viewBox="0 0 100 1" preserveAspectRatio="none" aria-hidden="true"><path d="M0 .5H100"/><path class="monitor-spend-fill" d="M0 .5H${percent}"/></svg>`}</div>`;
+  const lockLabel = p.capReached ? 'Paid usage unavailable' : 'Extra usage off';
+  return `<div class="monitor-spend${p.capReached ? ' is-reached' : ''}" title="${esc(label)}" aria-label="${esc(label)}"><span>Paid / mo</span><b>${esc(value(p.used))} / ${esc(value(p.limit))}</b>${p.capReached || p.enabled === false ? `<svg class="monitor-spend-lock" viewBox="0 0 16 16" role="img" aria-label="${esc(lockLabel)}"><rect x="3" y="7" width="10" height="7" rx="1"/><path d="M5 7V4a3 3 0 0 1 6 0v3"/></svg>` : ''}${percent == null ? '' : `<svg class="monitor-spend-track" viewBox="0 0 100 1" preserveAspectRatio="none" aria-hidden="true"><path d="M0 .5H100"/><path class="monitor-spend-fill" d="M0 .5H${percent}"/></svg>`}</div>`;
 }
 export function dashboardView(snapshot, requested = 'overview', viewport = { width: 440, height: 680 }) {
   const view = Object.hasOwn(dashboardNames, requested) ? requested : 'overview';
