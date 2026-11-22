@@ -9,6 +9,8 @@ export const creditLabel = b => isFableAllowance(b) ? 'Fable weekly meter · rem
 export const allowanceContext = b => isFableAllowance(b) ? 'Reported weekly allowance value, not a charge; not a paid credit balance or confirmation of model access' : 'allowance value, not a charge';
 export function fableAccessText(card) {
   if (card.id !== 'claude' || !(card.windows || []).some(w => w.pool === 'fable') && !(card.creditBalances || []).some(isFableAllowance)) return '';
+  const included = (card.windows || []).find(w => w.pool === 'fable' && w.included && typeof w.allowancePercentOfWeekly === 'number');
+  if (included) return `Included on your plan, up to ${new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(included.allowancePercentOfWeekly)}% of the weekly limit. Extra usage is separate.`;
   return /^pro$/i.test(card.plan || '') ? 'Pro · Fable uses paid credits; weekly meter does not grant access.' : 'Fable weekly meter is separate from paid spending; model access depends on your plan.';
 }
 export function claudeConnectionSection(card) {

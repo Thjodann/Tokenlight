@@ -69,7 +69,7 @@ Cursor cards show Grok / Composer and Third-party models as independent billing-
 
 Balances are independent of token totals and allowance percentages. Codex shows its reported current credit balance and available allowance-reset passes; Tokenlight never redeems a reset. ElevenLabs shows credits remaining in the current subscription cycle. Ollama shows included and purchased credit balances separately.
 
-Claude Code shows session, overall weekly, and Fable weekly allowances, plus Fable allowance value remaining. The current personal feed uses a private codename for the dollar-denominated Fable meter; Jared confirmed its provider UI label on October 31, 2026. This mapping requires the full dollar-allowance shape and may change with the provider interface. Fable allowance value is not billed cost and overlaps the overall usage limits.
+Claude Code shows session, overall weekly, and Fable weekly allowances, plus Fable allowance value remaining. The current personal feed uses a private codename for the dollar-denominated Fable meter; Jared confirmed its provider UI label on October 31, 2026. This mapping requires the full dollar-allowance shape and may change with the provider interface. Fable allowance value is not billed cost and overlaps the overall usage limits. When the connection instead reports an included Fable weekly limit, Tokenlight shows that share of the weekly plan. Extra usage that is switched off, with spend still under its monthly cap, is not labeled as a reached paid cap.
 
 <img width="1728" alt="image" src="https://github.com/user-attachments/assets/5b67c31d-0348-4c53-8263-adde90b0270e" />
 

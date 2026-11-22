@@ -54,3 +54,28 @@ test('pop-outs communicate paid cap visually without explanatory paragraphs',()=
   assert.match(html,/>Fable · week</);
   assert.doesNotMatch(html,/class="fable-access-note"|class="metric-paid-limit|<p\b/);
 });
+
+test('an included Fable weekly limit replaces the false paid-cap chip',()=>{
+  const usage={five_hour:{utilization:28,resets_at:'2099-11-22T04:30:00Z'},seven_day:{utilization:4,resets_at:'2099-11-25T23:00:00Z'},
+    limits:[{kind:'session',percent:28},{kind:'weekly_all',percent:4},{kind:'weekly_scoped',percent:6,resets_at:'2099-11-25T23:00:00Z',scope:{model:{display_name:'Fable'}}}],
+    weekly_scoped_shares:[{limit_index:2,allowance_percent_of_weekly:50}],
+    spend:{enabled:false,used:money(0),limit:money(2000)},extra_usage:{is_enabled:false,spend_limit_reached:true}};
+  const normalized=normalizeClaude(usage);
+  const c={id:'claude',title:'Claude Code',kind:'account',status:'ready',plan:'max',unit:'tokens',daily:[],monthly:1,partial:true,...normalized};
+  const details=creditSection(c,true);
+  assert.match(details,/Included on your plan, up to 50% of the weekly limit/);
+  assert.match(details,/Paid usage is disabled/);
+  assert.doesNotMatch(details,/Monthly spend cap reached/);
+  const snapshot={month:'2026-11',settings:{},demo:true,cards:[c]};
+  const desktop=desktopView(snapshot,'overview','');
+  assert.match(desktop,/allotment-plan">max</);
+  assert.match(desktop,/Fable · weekly/);
+  assert.doesNotMatch(desktop,/>Paid cap</);
+  const account=desktopView(snapshot,'account','');
+  assert.match(account,/Extra usage off/);
+  assert.doesNotMatch(account,/>Paid cap</);
+  const pop=dashboardView(snapshot);
+  assert.match(pop,/Fable 7d/);
+  assert.match(pop,/Extra usage off/);
+  assert.doesNotMatch(pop,/is-reached|>Paid cap</);
+});
