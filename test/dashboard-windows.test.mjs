@@ -80,6 +80,13 @@ test('main bootstrap keeps kiosk IPC read-only and display windows alive after m
   source = source.replace("Promise.all([import('./model.mjs'), import('./providers.mjs'), import('./insights.mjs'), import('./demo-data.mjs')])", 'Promise.resolve(__modules)');
   vm.runInNewContext(source, { require: id => id === 'electron' ? electron : id === 'node:fs/promises' ? fakeFS : id === './status-bar.cjs' ? { ...require(id), createStatusBar: args => require(id).createStatusBar({ ...args, platform: 'darwin' }) } : require(id), __modules: [model, { ProviderError }, insights, demoData], process: { env: {}, argv: ['--demo'] }, __dirname: '/fixture/src', setInterval: fn => { timer = fn; return { unref() {} }; } });
   await boot;
+  const relief = menu.getMenuItemById('relief-notes');
+  assert.equal(relief.label, 'Relief notes');
+  assert.equal(relief.checked, true);
+  relief.checked = false; relief.click(relief); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(relief.checked, false);
+  relief.checked = true; relief.click(relief); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(relief.checked, true);
   const main = windows[0], call = (w, channel, ...args) => handlers.get(channel)(event(w), ...args);
   assert.equal((await call(main, 'get-snapshot')).value.presentation.dashboard, false);
   assert.equal(handlers.has('dashboard-mode'), false, 'main has no mode-conversion command');

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage, safeStorage, nativeTheme, powerMonitor, autoUpdater, session } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage, safeStorage, nativeTheme, powerMonitor, autoUpdater, session, Notification } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const os = require('node:os');
@@ -57,6 +57,8 @@ class Service {
     try { this.settings.interfaceColors = normalizeInterfaceColors(this.settings.interfaceColors); } catch { this.settings.interfaceColors = null; }
     this.settings.dashboardWindows = normalizeDashboardWindows(this.settings.dashboardWindows);
     this.settings.layoutMode = normalizeLayout(this.settings.layoutMode);
+    this.settings.reliefNotes = this.settings.reliefNotes !== false;
+    if (!this.settings.reliefWalls || typeof this.settings.reliefWalls !== 'object' || Array.isArray(this.settings.reliefWalls)) this.settings.reliefWalls = {};
     this.cache = await this.read('usage-cache.json', {});
     const encrypted = await this.read('credentials.json', null);
     if (encrypted) {
@@ -148,6 +150,44 @@ class Service {
     if (item) item.checked = mode === 'mini';
     this.emit(); return this.snapshot();
   }
+  async setReliefNotes(enabled) {
+    if (typeof enabled !== 'boolean') throw new Error('Choose whether relief notes are on or off.');
+    const previous = this.settings.reliefNotes;
+    this.settings.reliefNotes = enabled;
+    try { await this.persist('settings.json', this.settings); }
+    catch (error) { this.settings.reliefNotes = previous; throw error; }
+    const item = Menu.getApplicationMenu?.()?.getMenuItemById('relief-notes');
+    if (item) item.checked = enabled;
+    this.emit();
+    return this.snapshot();
+  }
+  async noteRelief(sourceId, result) {
+    if (this.demo || !result) return;
+    // One chain so overlapping source refreshes cannot drop each other's remembered walls.
+    const run = (this.reliefChain || Promise.resolve()).catch(() => {}).then(() => this.applyRelief(sourceId, result));
+    this.reliefChain = run;
+    return run;
+  }
+  async applyRelief(sourceId, result) {
+    if (this.demo || !result) return;
+    let update = this.reliefUpdate;
+    if (!update) {
+      // main.cjs cannot statically import this module, and test sandboxes have no dynamic-import callback.
+      try { ({ reliefUpdate: update } = await import('./relief-notes.mjs')); this.reliefUpdate = update; }
+      catch { return; }
+    }
+    const source = model.SOURCES.find(s => s.id === sourceId);
+    const prior = this.settings.reliefWalls?.[sourceId];
+    const { memory, note } = update({ id: sourceId, title: source?.title || sourceId, windows: result.windows, paidUsage: result.paidUsage }, prior);
+    this.settings.reliefWalls = { ...(this.settings.reliefWalls || {}), [sourceId]: memory };
+    try { await this.persist('settings.json', this.settings); }
+    catch {
+      if (prior === undefined) delete this.settings.reliefWalls[sourceId];
+      else this.settings.reliefWalls[sourceId] = prior;
+      return;
+    }
+    if (note && this.settings.reliefNotes !== false) this.showReliefNote?.(note);
+  }
   async setColorMode(mode) {
     if (!MODES.includes(mode)) throw new Error('Choose Auto, Dark, or Light.');
     this.settings.colorMode = mode;
@@ -225,6 +265,7 @@ class Service {
           this.cache[key] = { ...result, lastUpdatedAt: Date.now() }; delete this.errors[key];
           if (allowKeychain) { this.settings.keychainAllowed[sourceId] = true; await this.persist('settings.json', this.settings); }
           await this.persist('usage-cache.json', this.cache);
+          try { await this.noteRelief(sourceId, result); } catch { /* A relief note must not turn a good reading into an error. */ }
         } catch (e) {
           if (!current()) return;
           this.errors[key] = { message: safeError(e), code: e.code || 'unavailable', retryAt: e.retryAt || (['setup', 'auth', 'file'].includes(e.code) ? Date.now() + (sourceId === 'claude' ? 60000 : 300000) : null) };
@@ -407,6 +448,7 @@ app.whenReady().then(async () => {
     { role: 'editMenu' }, { label: 'View', submenu: [
       { id: 'refresh-usage', label: 'Refresh usage', accelerator: 'CmdOrCtrl+R', click: () => { const e = focused(); if (e && !e.dashboard) void service.refresh(null, true); } },
       { id: 'mini-layout', label: 'Mini dashboard', accelerator: 'CmdOrCtrl+Shift+M', type: 'checkbox', checked: service.settings.layoutMode === 'mini', click: item => { const e = focused(); if (e && !e.dashboard) void service.setLayoutMode(item.checked ? 'mini' : 'dashboard'); } },
+      { id: 'relief-notes', label: 'Relief notes', type: 'checkbox', checked: service.settings.reliefNotes !== false, click: item => { void service.setReliefNotes(item.checked).catch(() => { item.checked = service.settings.reliefNotes !== false; }); } },
       { id: 'appearance-menu', label: 'Appearance', submenu: MODES.map(mode => ({ id: `appearance-${mode}`, label: mode === 'auto' ? 'Auto — follow system' : mode === 'dark' ? 'Dark' : 'Light', type: 'radio', checked: service.settings.colorMode === mode, click: () => { const e = focused(); if (e && !e.dashboard) void service.setColorMode(mode); } })) }, { role: 'togglefullscreen' }] }, { role: 'windowMenu' }
   ]));
   const openDashboard = mainDashboardOpener({ getWindow: () => window, createWindow: () => createWindow() });
@@ -420,6 +462,16 @@ app.whenReady().then(async () => {
     restoringDashboards = false;
     await persistDashboardWindows();
   }
+  service.showReliefNote = note => {
+    if (typeof Notification !== 'function' || (typeof Notification.isSupported === 'function' && !Notification.isSupported())) return;
+    const popup = new Notification({ title: String(note?.title || 'Tokenlight'), body: String(note?.body || '') });
+    popup.on('click', () => {
+      const entry = [...dashboards.entries.values()].find(item => !item.dashboard && item.window && !item.window.isDestroyed());
+      if (entry) { if (entry.window.isMinimized?.()) entry.window.restore?.(); entry.window.show(); entry.window.focus(); }
+      else app.emit('activate');
+    });
+    popup.show();
+  };
   statusBar = createStatusBar({ app, Tray, Menu, nativeImage, openDashboard, updateItems: () => updateMenuItems(updates, showUpdates, restartUpdate) });
   updates.on('change', () => { installMenu(); updateMenu(); statusBar?.updateMenu(); service.emit(); });
   updates.start();

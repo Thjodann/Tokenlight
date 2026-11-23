@@ -71,6 +71,8 @@ Balances are independent of token totals and allowance percentages. Codex shows 
 
 Claude Code shows session, overall weekly, and Fable weekly allowances, plus Fable allowance value remaining. The current personal feed uses a private codename for the dollar-denominated Fable meter; Jared confirmed its provider UI label on October 31, 2026. This mapping requires the full dollar-allowance shape and may change with the provider interface. Fable allowance value is not billed cost and overlaps the overall usage limits. When the connection instead reports an included Fable weekly limit, Tokenlight shows that share of the weekly plan. Extra usage that is switched off, with spend still under its monthly cap, is not labeled as a reached paid cap.
 
+While Tokenlight is running, including from the menu bar, it can show a Mac notification when a limit it previously saw at 100%, or a paid cap that was actually reached, later reads as open. The first reading of a source is remembered quietly. Sample data does not notify. View → Relief notes turns those notifications off without forgetting which limits were full. A Codex reset pass is not announced.
+
 <img width="1728" alt="image" src="https://github.com/user-attachments/assets/5b67c31d-0348-4c53-8263-adde90b0270e" />
 
 Paid Claude usage and its monthly cap use the provider's explicit currency precision. A prepaid balance is shown only when the connection reports it; an absent balance is labeled unreported. These figures cover the current account period even when a historical activity month is selected. Claude subscription credits and Claude API billing are separate.
