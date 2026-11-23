@@ -6,6 +6,7 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import * as insightModel from '../src/insights.mjs';
 import cachePolicy from '../src/credential-cache.cjs';
+import { reliefUpdate } from '../src/relief-notes.mjs';
 
 // Exercise the actual service while leaving Electron's window/bootstrap dormant.
 const mainUrl = new URL('../src/main.cjs', import.meta.url);
@@ -259,4 +260,25 @@ test('temporary Claude renewal failures preserve the last reading and retry when
   service.emit = () => {}; service.cache['2026-10:claude'] = { monthly: 10, lastUpdatedAt: Date.now() };
   await service.refresh('claude', true); assert.equal(service.snapshot().cards[0].monthly, 10); assert.equal(service.snapshot().cards[0].status, 'stale');
   await service.refresh('claude'); assert.equal(calls, 2); assert.equal(service.snapshot().cards[0].monthly, 45);
+});
+
+test('a live reading remembers a full limit quietly, then announces once when it opens', async () => {
+  let pass = 0;
+  const notes = [];
+  const service = createService({ loadCredentials: async () => ({}), readProvider: async () => ({ windows: [{ label: '5 hour', percent: ++pass === 1 ? 100 : 10 }] }) }, 'claude');
+  service.reliefUpdate = reliefUpdate;
+  service.showReliefNote = note => notes.push(note);
+  service.settings.reliefNotes = true;
+  service.emit = () => {};
+  await service.refresh('claude', true);
+  assert.equal(notes.length, 0);
+  assert.equal(service.settings.reliefWalls.claude.walls['5 hour'], true);
+  await service.refresh('claude', true);
+  assert.deepEqual(notes, [{ title: 'claude is open again', body: '5-hour session' }]);
+  notes.length = 0;
+  service.settings.reliefNotes = false;
+  service.settings.reliefWalls.claude.walls['5 hour'] = true;
+  await service.refresh('claude', true);
+  assert.equal(notes.length, 0);
+  assert.equal(service.settings.reliefWalls.claude.walls['5 hour'], undefined);
 });
