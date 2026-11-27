@@ -33,6 +33,7 @@ const updateWindowBackgrounds = () => {
 const { createClaudeLogin } = require('./claude-login.cjs');
 const { mainDashboardOpener, createStatusBar } = require('./status-bar.cjs');
 const { Updates, updateMenuItems, RELEASES } = require('./updater.cjs');
+const { ALERT_CHOICES: USAGE_ALERT_CHOICES, normalizeThresholds: normalizeAlertThresholds } = require('./usage-alert-levels.cjs');
 
 if (process.env.TOKENLIGHT_PROFILE && path.isAbsolute(process.env.TOKENLIGHT_PROFILE)) app.setPath('userData', process.env.TOKENLIGHT_PROFILE);
 const single = app.requestSingleInstanceLock();
@@ -59,6 +60,9 @@ class Service {
     this.settings.layoutMode = normalizeLayout(this.settings.layoutMode);
     this.settings.reliefNotes = this.settings.reliefNotes !== false;
     if (!this.settings.reliefWalls || typeof this.settings.reliefWalls !== 'object' || Array.isArray(this.settings.reliefWalls)) this.settings.reliefWalls = {};
+    this.settings.usageAlerts = this.settings.usageAlerts !== false;
+    this.settings.usageAlertThresholds = normalizeAlertThresholds(this.settings.usageAlertThresholds);
+    if (!this.settings.usageAlertMemory || typeof this.settings.usageAlertMemory !== 'object' || Array.isArray(this.settings.usageAlertMemory)) this.settings.usageAlertMemory = {};
     this.cache = await this.read('usage-cache.json', {});
     const encrypted = await this.read('credentials.json', null);
     if (encrypted) {
@@ -161,10 +165,35 @@ class Service {
     this.emit();
     return this.snapshot();
   }
+  async setUsageAlerts(enabled) {
+    if (typeof enabled !== 'boolean') throw new Error('Choose whether usage alerts are on or off.');
+    const previous = this.settings.usageAlerts;
+    this.settings.usageAlerts = enabled;
+    try { await this.persist('settings.json', this.settings); }
+    catch (error) { this.settings.usageAlerts = previous; throw error; }
+    const item = Menu.getApplicationMenu?.()?.getMenuItemById('usage-alerts');
+    if (item) item.checked = enabled;
+    this.emit();
+    return this.snapshot();
+  }
+  async setUsageAlertThreshold(threshold, enabled) {
+    if (!USAGE_ALERT_CHOICES.includes(threshold) || typeof enabled !== 'boolean') throw new Error('Choose a usage alert threshold.');
+    const previous = this.settings.usageAlertThresholds;
+    const others = (previous || []).filter(t => t !== threshold);
+    this.settings.usageAlertThresholds = normalizeAlertThresholds(enabled ? [...others, threshold] : others);
+    try { await this.persist('settings.json', this.settings); }
+    catch (error) { this.settings.usageAlertThresholds = previous; throw error; }
+    const item = Menu.getApplicationMenu?.()?.getMenuItemById(`usage-alert-${threshold}`);
+    if (item) item.checked = this.settings.usageAlertThresholds.includes(threshold);
+    this.emit();
+    return this.snapshot();
+  }
   async noteRelief(sourceId, result) {
     if (this.demo || !result) return;
-    // One chain so overlapping source refreshes cannot drop each other's remembered walls.
-    const run = (this.reliefChain || Promise.resolve()).catch(() => {}).then(() => this.applyRelief(sourceId, result));
+    // One chain so overlapping source refreshes cannot drop each other's remembered walls or alert levels.
+    const run = (this.reliefChain || Promise.resolve()).catch(() => {})
+      .then(() => this.applyRelief(sourceId, result)).catch(() => {})
+      .then(() => this.applyUsageAlerts(sourceId, result));
     this.reliefChain = run;
     return run;
   }
@@ -187,6 +216,26 @@ class Service {
       return;
     }
     if (note && this.settings.reliefNotes !== false) this.showReliefNote?.(note);
+  }
+  async applyUsageAlerts(sourceId, result) {
+    if (this.demo || !result) return;
+    let update = this.usageAlertUpdate;
+    if (!update) {
+      try { ({ usageAlertUpdate: update } = await import('./usage-alerts.mjs')); this.usageAlertUpdate = update; }
+      catch { return; }
+    }
+    const source = model.SOURCES.find(s => s.id === sourceId);
+    const prior = this.settings.usageAlertMemory?.[sourceId];
+    // Levels are tracked even while alerts are off, so turning them back on does not replay old crossings.
+    const { memory, note } = update({ id: sourceId, title: source?.title || sourceId, windows: result.windows }, prior, this.settings.usageAlertThresholds);
+    this.settings.usageAlertMemory = { ...(this.settings.usageAlertMemory || {}), [sourceId]: memory };
+    try { await this.persist('settings.json', this.settings); }
+    catch {
+      if (prior === undefined) delete this.settings.usageAlertMemory[sourceId];
+      else this.settings.usageAlertMemory[sourceId] = prior;
+      return;
+    }
+    if (note && this.settings.usageAlerts !== false) this.showUsageAlert?.(note);
   }
   async setColorMode(mode) {
     if (!MODES.includes(mode)) throw new Error('Choose Auto, Dark, or Light.');
@@ -449,6 +498,8 @@ app.whenReady().then(async () => {
       { id: 'refresh-usage', label: 'Refresh usage', accelerator: 'CmdOrCtrl+R', click: () => { const e = focused(); if (e && !e.dashboard) void service.refresh(null, true); } },
       { id: 'mini-layout', label: 'Mini dashboard', accelerator: 'CmdOrCtrl+Shift+M', type: 'checkbox', checked: service.settings.layoutMode === 'mini', click: item => { const e = focused(); if (e && !e.dashboard) void service.setLayoutMode(item.checked ? 'mini' : 'dashboard'); } },
       { id: 'relief-notes', label: 'Relief notes', type: 'checkbox', checked: service.settings.reliefNotes !== false, click: item => { void service.setReliefNotes(item.checked).catch(() => { item.checked = service.settings.reliefNotes !== false; }); } },
+      { id: 'usage-alerts', label: 'Usage alerts', type: 'checkbox', checked: service.settings.usageAlerts !== false, click: item => { void service.setUsageAlerts(item.checked).catch(() => { item.checked = service.settings.usageAlerts !== false; }); } },
+      { id: 'usage-alert-thresholds', label: 'Usage alert thresholds', submenu: USAGE_ALERT_CHOICES.map(threshold => ({ id: `usage-alert-${threshold}`, label: `${threshold}% used`, type: 'checkbox', checked: service.settings.usageAlertThresholds.includes(threshold), click: item => { void service.setUsageAlertThreshold(threshold, item.checked).catch(() => { item.checked = service.settings.usageAlertThresholds.includes(threshold); }); } })) },
       { id: 'appearance-menu', label: 'Appearance', submenu: MODES.map(mode => ({ id: `appearance-${mode}`, label: mode === 'auto' ? 'Auto — follow system' : mode === 'dark' ? 'Dark' : 'Light', type: 'radio', checked: service.settings.colorMode === mode, click: () => { const e = focused(); if (e && !e.dashboard) void service.setColorMode(mode); } })) }, { role: 'togglefullscreen' }] }, { role: 'windowMenu' }
   ]));
   const openDashboard = mainDashboardOpener({ getWindow: () => window, createWindow: () => createWindow() });
@@ -472,6 +523,7 @@ app.whenReady().then(async () => {
     });
     popup.show();
   };
+  service.showUsageAlert = note => service.showReliefNote(note);
   statusBar = createStatusBar({ app, Tray, Menu, nativeImage, openDashboard, updateItems: () => updateMenuItems(updates, showUpdates, restartUpdate) });
   updates.on('change', () => { installMenu(); updateMenu(); statusBar?.updateMenu(); service.emit(); });
   updates.start();
