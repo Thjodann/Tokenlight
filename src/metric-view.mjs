@@ -26,7 +26,7 @@ export function activityReading(card) {
   const unit = activityUnitLabel(card);
   if (!finite(card.monthly)) return 'Not reported';
   // A reported zero says so, so it never reads like a missing reading.
-  return `${card.partial ? '~' : ''}${activityAmount(card)} ${unit.short}${card.monthly === 0 ? ' recorded' : ''}`;
+  return `${card.partial ? '~' : ''}${activityAmount(card)} ${unit.short}${card.monthly === 0 && !card.partial ? ' recorded' : ''}`;
 }
 export function activityCaption(card, month) {
   const period = new Date(month + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'short', timeZone: card.chartZone === 'PT' ? 'Etc/GMT+8' : 'UTC' });
