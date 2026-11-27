@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import * as insightModel from '../src/insights.mjs';
 import cachePolicy from '../src/credential-cache.cjs';
 import { reliefUpdate } from '../src/relief-notes.mjs';
+import { usageAlertUpdate } from '../src/usage-alerts.mjs';
 
 // Exercise the actual service while leaving Electron's window/bootstrap dormant.
 const mainUrl = new URL('../src/main.cjs', import.meta.url);
@@ -281,4 +282,28 @@ test('a live reading remembers a full limit quietly, then announces once when it
   await service.refresh('claude', true);
   assert.equal(notes.length, 0);
   assert.equal(service.settings.reliefWalls.claude.walls['5 hour'], undefined);
+});
+
+test('a live reading announces a crossed usage threshold once, and silenced alerts still track the level', async () => {
+  const readings = [40, 85, 88, 3, 96];
+  const notes = [];
+  const service = createService({ loadCredentials: async () => ({}), readProvider: async () => ({ windows: [{ label: '5 hour', percent: readings.shift() }] }) }, 'claude');
+  service.reliefUpdate = reliefUpdate;
+  service.usageAlertUpdate = usageAlertUpdate;
+  service.showReliefNote = () => {};
+  service.showUsageAlert = note => notes.push(note);
+  Object.assign(service.settings, { usageAlerts: true, usageAlertThresholds: [80, 95], usageAlertMemory: {}, reliefWalls: {} });
+  service.emit = () => {};
+  await service.refresh('claude', true);
+  assert.equal(notes.length, 0);
+  await service.refresh('claude', true);
+  assert.deepEqual(notes, [{ title: 'claude passed 80%', body: '5-hour session 85% used' }]);
+  await service.refresh('claude', true);
+  assert.equal(notes.length, 1);
+  await service.refresh('claude', true);
+  assert.equal(service.settings.usageAlertMemory.claude.limits['5 hour'], undefined);
+  service.settings.usageAlerts = false;
+  await service.refresh('claude', true);
+  assert.equal(notes.length, 1);
+  assert.equal(service.settings.usageAlertMemory.claude.limits['5 hour'].at, 95);
 });

@@ -87,6 +87,18 @@ test('main bootstrap keeps kiosk IPC read-only and display windows alive after m
   assert.equal(relief.checked, false);
   relief.checked = true; relief.click(relief); await new Promise(resolve => setImmediate(resolve));
   assert.equal(relief.checked, true);
+  const alerts = menu.getMenuItemById('usage-alerts');
+  assert.equal(alerts.label, 'Usage alerts');
+  assert.equal(alerts.checked, true);
+  alerts.checked = false; alerts.click(alerts); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(alerts.checked, false);
+  const at80 = menu.getMenuItemById('usage-alert-80'), at50 = menu.getMenuItemById('usage-alert-50');
+  assert.equal(at80.checked, true);
+  assert.equal(at50.checked, false);
+  at80.checked = false; at80.click(at80); await new Promise(resolve => setImmediate(resolve));
+  at50.checked = true; at50.click(at50); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(at80.checked, false);
+  assert.equal(at50.checked, true);
   const main = windows[0], call = (w, channel, ...args) => handlers.get(channel)(event(w), ...args);
   assert.equal((await call(main, 'get-snapshot')).value.presentation.dashboard, false);
   assert.equal(handlers.has('dashboard-mode'), false, 'main has no mode-conversion command');
