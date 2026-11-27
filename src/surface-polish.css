@@ -652,3 +652,24 @@ body[data-dashboard=true] .monitor-page:not([data-view="providers"])
   .monitor-ring-legend [data-allowance-state] b {
   color: inherit;
 }
+
+/* Binding allowance. The dial follows the allowance with the least left among
+   those that gate the whole source; its row is outlined so the dial's number
+   has a visible owner. Rows it blocks stay readable but step back. Color stays
+   the provider identity, so emphasis uses outline and opacity, not hue. */
+.allotment-limit[data-binding="true"] {
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--source-accent) 50%, transparent);
+}
+.allowance-workspace .desk-ledger .desk-instruments .desk-provider .allotment-limit[data-binding="true"] {
+  background: color-mix(in srgb, var(--panel), var(--source-accent) 14%);
+}
+.allowance-workspace:not(.overview-polish) .allotment-limit[data-binding="true"] { padding: 3px 6px; margin: -3px -6px; }
+.allotment-limit[data-blocked="true"] { opacity: .5; }
+.allotment-limit[data-blocked="true"] > i { background: var(--muted); }
+.allotment-dial[data-limit-reached="true"] figcaption > .allotment-dial-status {
+  display: block; max-width: 64%; text-align: center; line-height: 1.15; white-space: normal; color: var(--ink);
+}
+.allotment-dial figcaption > .allotment-dial-reset {
+  display: block; margin-top: 2px; font-size: 9px; color: var(--muted); white-space: nowrap; line-height: 1.1;
+}

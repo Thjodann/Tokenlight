@@ -9,7 +9,7 @@ import { miniView } from '../src/mini-view.mjs';
 const card = { id:'ollama', title:'Ollama Cloud', kind:'api', status:'ready', monthly:null, unit:'tokens', daily:[], windows:[{label:'Session',percent:100},{label:'Weekly',percent:18.1}], creditBalances:[{label:'Purchased credit balance',value:0,unit:'USD'}] };
 test('absent activity never borrows an allowance; balances never borrow a cost or cap warning', () => {
   assert.equal(activityReading(card),'Not reported');
-  assert.equal(activityReading({...card,monthly:0}),'0 tok');
+  assert.equal(activityReading({...card,monthly:0}),'0 tok recorded');
   assert.equal(activityReading({...card,monthly:5500,unit:'credits',partial:true}),'~5.5K cr');
   assert.equal(activityCaption({...card,id:'claude'},'2026-11'),'Nov · tokens · this Mac');
   assert.equal(balanceReading({...card,creditBalances:[],apiCost:{total:18.35,unit:'USD'}}).text,'—');

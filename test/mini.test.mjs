@@ -32,7 +32,7 @@ test('all eight sources share six original, self-contained provider marks', () =
 });
 
 test('mini metrics retain zero, units, incomplete history and unknown values', () => {
-  assert.equal(miniReading({ monthly: 0, unit: 'tokens' }), '0 tok');
+  assert.equal(miniReading({ monthly: 0, unit: 'tokens' }), '0 tok recorded');
   assert.equal(miniReading({ monthly: 0, unit: 'credits', partial: true }), '~0 cr');
   assert.equal(miniReading({ monthly: null }), 'Not reported');
   assert.equal(miniReading({ monthly: null, status: 'setup' }), 'Not reported');
